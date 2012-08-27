@@ -15,6 +15,7 @@ class TestLexer(unittest.TestCase):
                                        (r"\.", 'MAYBE-DOT'),
                                        (r"-", 'INTEGER-OR-SYMBOL'),
                                        (r"[0-9]", 'MAYBE-INTEGER'),
+                                       (r'"', 'MAYBE-STRING'),
                                        (r"[^\(\)\s;]", 'SYMBOL')], discard=True),
                  'COMMENT': lexer.State([(r"\n", 'START'),
                                          (r".", 'COMMENT')], discard=True),
@@ -28,16 +29,21 @@ class TestLexer(unittest.TestCase):
                  'MAYBE-INTEGER': lexer.State([(r"[0-9]", 'MAYBE-INTEGER'),
                                                (r"\.", 'MAYBE-FLOAT'),
                                                (r"[^\(\)\s;]", 'SYMBOL')], token='INTEGER'),
+                 'MAYBE-STRING': lexer.State([(r'[^"\\]', 'MAYBE-STRING'),
+                                              (r'\\', 'SCAPE-CHAR'),
+                                              (r'"', 'STRING')]),
+                 'SCAPE-CHAR': lexer.State([(r'.', 'MAYBE-STRING')]),
+                 'STRING': lexer.State(token='STRING'),
                  'MAYBE-FLOAT': lexer.State([(r"[0-9]", 'MAYBE-FLOAT'),
                                              (r"[^\(\)\s;]", 'SYMBOL')], token='FLOAT'),
-                 'SYMBOL': lexer.State([(r"[^\(\)\s]", 'SYMBOL')], token='SYMBOL')}
+                 'SYMBOL': lexer.State([(r"[^\(\)\s;]", 'SYMBOL')], token='SYMBOL')}
 
         tokenizer = lexer.Tokenizer(rules, start='START')
 
         string = """
             ; definition of foo:
             (define foo (lambda (x . y)
-                        (bar x y)))
+                        (bar x y "spam \\"love\\" eggs")))
 
             ; displaying something...
             (display '(foo -15
@@ -60,6 +66,7 @@ class TestLexer(unittest.TestCase):
                            ('SYMBOL', 'bar'),
                            ('SYMBOL', 'x'),
                            ('SYMBOL', 'y'),
+                           ('STRING', '"spam \\"love\\" eggs"'),
                            ('RPAREN', ')'),
                            ('RPAREN', ')'),
                            ('RPAREN', ')'),
@@ -76,7 +83,7 @@ class TestLexer(unittest.TestCase):
                            ('RPAREN', ')'),
                            ('RPAREN', ')') ]
 
-        tokens = list(tokenizer.parse(string))
+        tokens = list(tokenizer.tokens(string))
 
         self.assertEquals(len(expected_tokens), len(tokens))
 

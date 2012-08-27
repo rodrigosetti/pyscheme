@@ -67,9 +67,9 @@ class Tokenizer(object):
         self.states = states
         self.start = self.states[start]
 
-    def parse(self, text):
+    def tokens(self, text):
         """
-        Parses the input text and returns a generator that one can iterate over
+        Analizes the input text and returns a generator that one can iterate over
         the matched tokens. Raises a SyntaxError if the machine encouters an
         unexpected character.
         """
