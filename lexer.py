@@ -45,7 +45,15 @@ class Token(object):
     """
 
     def __init__(self, value, type, line, column):
-        self.value = value
+        if type == 'STRING':
+            self.value = eval(value)
+        elif type == 'INTEGER':
+            self.value = int(value)
+        elif type == 'FLOAT':
+            self.value = float(value)
+        else:
+            self.value = value
+
         self.type = type
         self.line = line
         self.column = column

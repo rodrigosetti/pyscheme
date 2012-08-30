@@ -68,7 +68,7 @@ class TestLexer(unittest.TestCase):
                            ('SYMBOL', 'bar'),
                            ('SYMBOL', 'x'),
                            ('SYMBOL', 'y'),
-                           ('STRING', '"spam \\"love\\" eggs"'),
+                           ('STRING', 'spam "love" eggs'),
                            ('RPAREN', ')'),
                            ('RPAREN', ')'),
                            ('RPAREN', ')'),
@@ -77,11 +77,11 @@ class TestLexer(unittest.TestCase):
                            ('QUOTE', "'"),
                            ('LPAREN', '('),
                            ('SYMBOL', 'foo'),
-                           ('INTEGER', '-15'),
-                           ('INTEGER', '7'),
-                           ('FLOAT', '10.'),
-                           ('FLOAT', '20.5'),
-                           ('FLOAT', '.30'),
+                           ('INTEGER', -15),
+                           ('INTEGER', 7),
+                           ('FLOAT', 10.),
+                           ('FLOAT', 20.5),
+                           ('FLOAT', .3),
                            ('RPAREN', ')'),
                            ('RPAREN', ')') ]
 
@@ -99,8 +99,8 @@ class TestLexer(unittest.TestCase):
 
         expected_tokens = [('LPAREN', '('),
                            ('SYMBOL', 'add'),
-                           ('INTEGER', '2'),
-                           ('INTEGER', '3'),
+                           ('INTEGER', 2),
+                           ('INTEGER', 3),
                            ('RPAREN', ')') ]
 
         tokens = list(tokenizer.tokens(string))
