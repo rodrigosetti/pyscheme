@@ -119,3 +119,11 @@ class Tokenizer(object):
                 if consume:
                     break
 
+        # try to recognize the last token, if there's buffer
+        if token_buffer:
+            if current.token:
+                # yield the token accumulated in buffer
+                yield Token(''.join(token_buffer), current.token, line, column)
+            else:
+                raise SyntaxError('unexpected end of stream line: %d, column: %d' % (line, column))
+
