@@ -1,7 +1,7 @@
 #! coding: utf-8
 
 import unittest
-import lexer
+import scheme.lexer as lexer
 
 class TestLexer(unittest.TestCase):
 

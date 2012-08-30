@@ -1,7 +1,7 @@
 #! coding: utf-8
 
 import unittest
-import buffer
+import scheme.buffer as buffer
 
 class TestBuffer(unittest.TestCase):
 

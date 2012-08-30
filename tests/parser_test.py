@@ -1,8 +1,8 @@
 #! coding: utf-8
 
 import unittest
-import lexer
-import parser
+import scheme.lexer as lexer
+import scheme.parser as parser
 
 class TestParser(unittest.TestCase):
 
