@@ -124,8 +124,9 @@ class OneOrMore(Expression):
 
 class Token(Expression):
 
-    def __init__(self, type):
+    def __init__(self, type, discard=False):
         self.type = type
+        self.discard = discard
 
     def match(self, tokens, mandatory=False):
         matches = []
@@ -135,7 +136,7 @@ class Token(Expression):
             try:
                 next_token = next(iter(m_tokens))
                 if next_token.type == self.type:
-                    return Result(True, [Element(next_token)])
+                    return Result(True, [Element(next_token)] if not self.discard else [])
             except StopIteration:
                 pass
             tokens.restore()
@@ -157,8 +158,8 @@ class Parser(object):
         self.grammar = grammar if grammar else {}
         self.start = self.expression(start)
 
-    def token(self, type):
-        return Token(type)
+    def token(self, type, discard=False):
+        return Token(type, discard)
 
     def expression(self, name):
         return Expression(name, parser=self)
@@ -181,6 +182,12 @@ class Parser(object):
             return result.tree
         else:
             return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
 
 class Result(object):
 
