@@ -153,6 +153,8 @@ class Environment(dict):
         Adds an expression and the environment it's supposed to be
         evaluated
         """
+        if name in self:
+            raise RuntimeError("Symbol %s already defined in environment" % name)
         super(Environment, self).__setitem__(name, SymbolData(expression, environment, is_evaluated))
 
     def __setitem__(self, *args):
@@ -267,7 +269,8 @@ class Procedure(object):
             cur_arg = arguments
             for name in self.params_names:
                 if not is_pair(cur_arg):
-                    raise SyntaxError("Too few arguments for procedure. should be at least %d" % len(self.params_names))
+                    raise RuntimeError("Too few arguments for procedure. should be at least %d" %
+                                        len(self.params_names))
 
                 # name unevaluated expression argument in procedure environment
                 procedure_env.add(name, cur_arg.first, caller_environment)
@@ -276,11 +279,12 @@ class Procedure(object):
 
             # if there is a variable param name, name it to the rest of arguments
             if self.variable_param:
-                variable = cons(Token('list', 'SYMBOL'), cur_arg)
+                variable = cons(lambda args,env: args, cur_arg)
                 procedure_env.add(self.variable_param, variable, caller_environment)
             elif cur_arg is not None:
                 # there's no variable params and there still arguments (too much arguments)
-                raise SyntaxError("Too much arguments for procedure. should be %d" % len(self.params_names))
+                raise RuntimeError("Too much arguments for procedure. should be %d" %
+                                   len(self.params_names))
 
             # evaluate procedure expression with the local environment populated
             # with parameters
@@ -304,16 +308,19 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # return the quoted expression unevaluated
                     quoted = expression.second
                     if not is_pair(quoted) or len(quoted) != 1:
-                        SyntaxError("quote expression should have two parts at line %d, column %d" % (head.line, head.column))
+                        SyntaxError("quote expression should have two parts at line %d, column %d" %
+                                    (head.line, head.column))
 
                     return quoted.first
                 elif head.value == 'define':
                     # this is mostly to be used in REPL
                     # (define <symbol> <expression>)
                     if len(expression) != 3:
-                        raise SyntaxError("Define expression should have three parts at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("Define expression should have three parts at line %d, column %d" %
+                                          (head.line, head.column))
                     if not is_symbol(expression[1]):
-                        raise SyntaxError("The first part of define expression should be a symbol. At line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("The first part of define expression should be a symbol. At line %d, column %d" %
+                                          (head.line, head.column))
 
                     environment.add(expression[1].value, expression[2], environment)
                     return expression[1]
@@ -321,18 +328,22 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # evaluate let expression:
                     # (let ( (<symbol> <expression>)* ) <expression>)
                     if len(expression) != 3:
-                        raise SyntaxError("Let expression should have three parts at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("Let expression should have three parts at line %d, column %d" %
+                                          (head.line, head.column))
 
                     # create an empty sub-environment, child of the current environment
                     sub_environment = Environment(environment)
 
                     for n, definition in enumerate(expression[1], 1):
                         if not is_pair(definition):
-                            raise SyntaxError("The definition number %d of let expression is not a list. At line %d, column %d" % (n, head.line, head.column))
+                            raise SyntaxError("The definition number %d of let expression is not a list. At line %d, column %d" %
+                                              (n, head.line, head.column))
                         if len(definition) != 2:
-                            raise SyntaxError("The definition number %d of let expression should have two parts. At line %d, column %d" % (n, head.line, head.column))
+                            raise SyntaxError("The definition number %d of let expression should have two parts. At line %d, column %d" %
+                                              (n, head.line, head.column))
                         if not is_symbol(definition[0]):
-                            raise SyntaxError("The first part of definition number %d of let expression should be a symbol. At line %d, column %d" % (n, head.line, head.column))
+                            raise SyntaxError("The first part of definition number %d of let expression should be a symbol. At line %d, column %d" %
+                                              (n, head.line, head.column))
 
                         # name evaluated expression in current sub-environment
                         sub_environment.add(definition[0].value, definition[1], sub_environment)
@@ -344,13 +355,15 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # evalualte lambda expression
                     # (lambda ( <symbol>* ) <expression>)
                     if len(expression) != 3:
-                        raise SyntaxError("Lambda expression should have three parts at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("Lambda expression should have three parts at line %d, column %d" %
+                                          (head.line, head.column))
 
                     params = expression[1]
                     lambda_expr = expression[2]
 
                     if (not is_pair(params) or not all(is_symbol(e) for e in params)) and params is not None:
-                        raise SyntaxError("Lambda parameters should be a list of symbols at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("Lambda parameters should be a list of symbols at line %d, column %d" %
+                                          (head.line, head.column))
 
                     if params is not None:
                         params_names = [e.value for e in params]
@@ -360,7 +373,8 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                         last = None
 
                     if last is not None and not is_symbol(last):
-                        raise SyntaxError("Variable parameter of lambda should be symbol at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("Variable parameter of lambda should be symbol at line %d, column %d" %
+                                          (head.line, head.column))
 
                     variable_param = last.value if last is not None else None
 
@@ -373,11 +387,13 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # evaluate if expression
                     # (if <expression> <expression> <expression>)
                     if len(expression) != 4:
-                        raise SyntaxError("If expression should have four parts at line %d, column %d" % (head.line, head.column))
+                        raise SyntaxError("If expression should have four parts at line %d, column %d" %
+                                          (head.line, head.column))
 
                     condition = evaluate_sexpression(expression[1], environment)
                     if type(condition) != Token:
-                        raise SyntaxError("Condition of if expression didn't evaluate to token at line %d, column %d" % (head.line, head.column))
+                        raise RuntimeError("Condition of if expression didn't evaluate to token at line %d, column %d" %
+                                           (head.line, head.column))
 
                     # return the consequence or alternative depending on the thruth value of condition
                     if condition.value:
@@ -385,10 +401,12 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     else:
                         return evaluate_sexpression(expression[3], environment, procedure_context)
                 else:
-                    raise SyntaxError("Could not call symbol head of s-expression at line %d, column %d" % (head.line, head.column))
+                    raise RuntimeError("Symbolic value %s is not callable, line %d, column %d" %
+                                       (head.value, head.line, head.column))
             else:
                 # head of s-expression is not a symbol (i.e. a number, string, etc.)
-                raise SyntaxError("Could not call non-symbol %s of s-expression at line %d, column %d" % (head, head.line, head.column))
+                raise SyntaxError("Non-symbolic value %s is not callable, at line %d, column %d" %
+                                  (head, head.line, head.column))
         elif callable(head):
             # it's a procedure (evaluated from lambda) or a built-in
 
@@ -402,7 +420,8 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
             return head(arguments, environment)
         else:
             # head of s-expression is not an atom
-            raise SyntaxError("Could not call non-atom %s of s-expression at line %d, column %d" % (head, head.line, head.column))
+            raise RuntimeError("Could not call non-atom %s of s-expression at line %d, column %d" %
+                               (head, head.line, head.column))
 
     elif is_atom(expression):
         # expression is atom
@@ -453,13 +472,13 @@ def make_global_environment():
         '*':     evaluate_args(lambda args, env: Token(reduce(operator.mul,  (e.value for e in args)))),
         '/':     evaluate_args(lambda args, env: Token(reduce(operator.div,  (e.value for e in args)))),
         'mod':   evaluate_args(lambda args, env: Token(reduce(operator.mod,  (e.value for e in args)))),
-        'not':   evaluate_args(lambda args, env: Token(reduce(operator.not_, (e.value for e in args)),  'BOOLEAN')),
-        'eq?':   evaluate_args(lambda args, env: Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN')),
-        '=':     evaluate_args(lambda args, env: Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN')),
-        '<':     evaluate_args(lambda args, env: Token(reduce(operator.lt,   (e.value for e in args)),  'BOOLEAN')),
-        '>':     evaluate_args(lambda args, env: Token(reduce(operator.gt,   (e.value for e in args)),  'BOOLEAN')),
-        '<=':    evaluate_args(lambda args, env: Token(reduce(operator.le,   (e.value for e in args)),  'BOOLEAN')),
-        '>=':    evaluate_args(lambda args, env: Token(reduce(operator.ge,   (e.value for e in args)),  'BOOLEAN')),
+        'not':   evaluate_args(lambda args, env: Token(not args[0].value, 'BOOLEAN')),
+        'eq?':   evaluate_args(lambda args, env: Token(args[0].value is args[1].value,  'BOOLEAN')),
+        '=':     evaluate_args(lambda args, env: Token(args[0].value == args[1].value,  'BOOLEAN')),
+        '<':     evaluate_args(lambda args, env: Token(args[0].value < args[1].value,  'BOOLEAN')),
+        '>':     evaluate_args(lambda args, env: Token(args[0].value > args[1].value,  'BOOLEAN')),
+        '<=':    evaluate_args(lambda args, env: Token(args[0].value <= args[1].value,  'BOOLEAN')),
+        '>=':    evaluate_args(lambda args, env: Token(args[0].value >= args[1].value,  'BOOLEAN')),
         'and':   evaluate_args(lambda args, env: Token(all(e.value for e in args),  'BOOLEAN')),
         'or':    lambda args, env: Token(any(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN'),
         'nil?':  evaluate_args(lambda args, env: Token(car(args) == None,  'BOOLEAN')),
