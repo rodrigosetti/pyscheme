@@ -302,11 +302,12 @@ def evaluate_sexpression(expression, environment):
                 else:
                     raise SyntaxError("Could not call symbol head of s-expression at line %d, column %d" % (head.line, head.column))
             else:
-                # head of s-expression is not a symbol
+                # head of s-expression is not a symbol (i.e. a number, string, etc.)
                 raise SyntaxError("Could not call non-symbol head of s-expression at line %d, column %d" % (head.line, head.column))
         elif callable(head):
+            # it's a procedure (evaluated from lambda) or a built-in
 
-            # evaluate arguments before
+            # evaluate arguments before calling
             if is_pair(expression.second):
                 arguments = create_list([evaluate_sexpression(e, environment) for e in expression.second])
             else:
@@ -342,7 +343,6 @@ def evaluate_sexpression(expression, environment):
         # expression is not a token, pair, nil or procedure (???)
         raise ValueError("Invalid expression: %s" % expression)
 
-
 # define the DEFAULT_ENVIRONMENT
 DEFAULT_ENVIRONMENT = Environment()
 DEFAULT_ENVIRONMENT.update({
@@ -360,9 +360,10 @@ DEFAULT_ENVIRONMENT.update({
     '>': lambda args:    Token(reduce(operator.gt,   (e.value for e in args)),  'BOOLEAN'),
     '<=': lambda args:   Token(reduce(operator.le,   (e.value for e in args)),  'BOOLEAN'),
     '>=': lambda args:   Token(reduce(operator.ge,   (e.value for e in args)),  'BOOLEAN'),
+    'empty?': lambda args: Token(car(args) == None, 'BOOLEAN'),
     'len': lambda args:  Token(len(car(args)) if car(args) is not None else 0, 'INTEGER'),
     'list': lambda args: args,
-    'cons': lambda args: cons(car(args), cdr(args)),
+    'cons': lambda args: cons(car(args), car(cdr(args))),
     'car': lambda args:  car(car(args)),
     'cdr': lambda args:  cdr(car(args))})
 
