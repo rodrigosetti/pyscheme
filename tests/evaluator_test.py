@@ -33,11 +33,10 @@ class TestEvaluator(unittest.TestCase):
 
         string = "(a b c d)"
 
-        expected_structure = cons(
-                              cons(('SYMBOL', 'a'),
-                                cons(('SYMBOL', 'b'),
-                                 cons(('SYMBOL', 'c'),
-                                  cons(('SYMBOL', 'd'), None)))), None)
+        expected_structure = cons(('SYMBOL', 'a'),
+                              cons(('SYMBOL', 'b'),
+                               cons(('SYMBOL', 'c'),
+                                cons(('SYMBOL', 'd'), None))))
 
         result = evaluator.string_to_scheme(string)
 
@@ -47,10 +46,9 @@ class TestEvaluator(unittest.TestCase):
 
         string = "(a b c . d)"
 
-        expected_structure = cons(
-                              cons(('SYMBOL', 'a'),
-                                cons(('SYMBOL', 'b'),
-                                 cons(('SYMBOL', 'c'), ('SYMBOL', 'd')))), None)
+        expected_structure = cons(('SYMBOL', 'a'),
+                              cons(('SYMBOL', 'b'),
+                               cons(('SYMBOL', 'c'), ('SYMBOL', 'd'))))
 
         result = evaluator.string_to_scheme(string)
 
@@ -58,14 +56,13 @@ class TestEvaluator(unittest.TestCase):
 
     def test_quote_notation(self):
 
-        expected_structure = cons(
-                              cons(('SYMBOL', 'quote'),
-                               cons(
-                                cons(('SYMBOL', 'a'),
-                                 cons(
-                                  cons(('SYMBOL', 'quote'),
-                                   cons(('SYMBOL', 'b'), None)),
-                                    cons(('SYMBOL', 'c'), None))), None)), None)
+        expected_structure = cons(('SYMBOL', 'quote'),
+                              cons(
+                               cons(('SYMBOL', 'a'),
+                                cons(
+                                 cons(('SYMBOL', 'quote'),
+                                  cons(('SYMBOL', 'b'), None)),
+                                   cons(('SYMBOL', 'c'), None))), None))
 
         string = "'(a 'b c)"
 
@@ -75,11 +72,42 @@ class TestEvaluator(unittest.TestCase):
 
     def test_nil_value(self):
 
+        # using nil
         result = evaluator.string_to_scheme('nil')
-        self.compare_result(cons(None, None), result)
+        self.compare_result(None, result)
 
+        # using the () notation
         result = evaluator.string_to_scheme('()')
-        self.compare_result(cons(None, None), result)
+        self.compare_result(None, result)
+
+        # using the () notation
+        result = evaluator.string_to_scheme('()')
+        self.compare_result(None, result)
+
+        # using the () notation
+        result = evaluator.evaluate("(len ())")
+        self.assertEquals(0, result.value)
+
+        # using nil
+        result = evaluator.evaluate("(len nil)")
+        self.assertEquals(0, result.value)
+
+        # using empty list
+        result = evaluator.evaluate("(len (list ))")
+        self.assertEquals(0, result.value)
+
+        # using the () notation
+        result = evaluator.evaluate("(nil? ())")
+        self.assertEquals(True, result.value)
+
+        # using nil
+        result = evaluator.evaluate("(nil? nil)")
+        self.assertEquals(True, result.value)
+
+        # using empty list
+        result = evaluator.evaluate("(nil? (list ))")
+        self.assertEquals(True, result.value)
+
 
     def test_iterate_over_cons(self):
 
@@ -98,91 +126,67 @@ class TestEvaluator(unittest.TestCase):
 
         # built-in procedure application
         result = evaluator.evaluate("(+ 1 2 3)")
-        self.assertEquals(6, result[0].value)
+        self.assertEquals(6, result.value)
 
         # let special form, environment
         result = evaluator.evaluate("(let ((x 10) (y 20)) (+ x y))")
-        self.assertEquals(30, result[0].value)
+        self.assertEquals(30, result.value)
 
         # creating and calling procedures
         result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
-        self.assertEquals(41, result[0].value)
+        self.assertEquals(41, result.value)
 
         # if form
         result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (if (= (inc 40) 41) 3 4))")
-        self.assertEquals(3, result[0].value)
+        self.assertEquals(3, result.value)
 
         # quoting symbols
         result = evaluator.evaluate("(+ 'a 'b)")
-        self.assertEquals('ab', result[0].value)
+        self.assertEquals('ab', result.value)
 
         # quoting lists
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (car x))")
-        self.assertEquals('+', result[0].value)
+        self.assertEquals('+', result.value)
 
         # length of a list
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (len x))")
-        self.assertEquals(3, result[0].value)
+        self.assertEquals(3, result.value)
 
         # using cdr
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (len (cdr x)))")
-        self.assertEquals(2, result[0].value)
+        self.assertEquals(2, result.value)
 
         # using cons
         result = evaluator.evaluate("(let ((x (cons 1 2))) (car x))")
-        self.assertEquals(1, result[0].value)
+        self.assertEquals(1, result.value)
 
         # using cons
         result = evaluator.evaluate("(let ((x (cons 1 2))) (cdr x))")
-        self.assertEquals(2, result[0].value)
-
-        # using the () notation
-        result = evaluator.evaluate("(len ())")
-        self.assertEquals(0, result[0].value)
-
-        # using nil
-        result = evaluator.evaluate("(len nil)")
-        self.assertEquals(0, result[0].value)
-
-        # using empty list
-        result = evaluator.evaluate("(len (list ))")
-        self.assertEquals(0, result[0].value)
-
-        # using the () notation
-        result = evaluator.evaluate("(nil? ())")
-        self.assertEquals(True, result[0].value)
-
-        # using nil
-        result = evaluator.evaluate("(nil? nil)")
-        self.assertEquals(True, result[0].value)
-
-        # using empty list
-        result = evaluator.evaluate("(nil? (list ))")
-        self.assertEquals(True, result[0].value)
+        self.assertEquals(2, result.value)
 
         # variable arguments
         result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1 2 3 4 5))")
-        self.assertEquals(5, result[0].value)
+        self.assertEquals(5, result.value)
 
         # variable arguments as optional
         result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1))")
-        self.assertEquals(1, result[0].value)
+        self.assertEquals(1, result.value)
 
         # nested environments in let
         result = evaluator.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
-        self.assertEquals(28, result[0].value)
+        self.assertEquals(28, result.value)
 
         # nested environments in lambdas
         result = evaluator.evaluate("(let ((x 100) (inc (lambda (x) (+ 1 x)))) (+ (inc 7) x))")
-        self.assertEquals(108, result[0].value)
+        self.assertEquals(108, result.value)
 
         # atom?
         result = evaluator.evaluate("(atom? 'x)")
-        self.assertEquals(True, result[0].value)
+        self.assertEquals(True, result.value)
 
         # atom?
         result = evaluator.evaluate("(atom? '(1 2 3 4 5))")
-        self.assertEquals(False, result[0].value)
+        self.assertEquals(False, result.value)
 
     def test_quicksort(self):
 
@@ -212,7 +216,6 @@ class TestEvaluator(unittest.TestCase):
 
         result = evaluator.evaluate(string)
 
-        sorted = result[0]
-        self.assertEquals(10, len(sorted))
-        self.assertEquals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [e.value for e in sorted])
+        self.assertEquals(10, len(result))
+        self.assertEquals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [e.value for e in result])
 

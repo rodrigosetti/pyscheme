@@ -179,7 +179,7 @@ class Parser(object):
             raise SyntaxError("Unexpected %s at line %d, column %d. Expecting end of tokens" % (token.value, token.line, token.column))
 
         if result.matches == True:
-            return result.tree
+            return result.tree[0]
         else:
             return None
 

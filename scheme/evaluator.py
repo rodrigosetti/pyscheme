@@ -174,8 +174,7 @@ def evaluate(string):
     """
     Evaluate program string, returning a s-expression result
     """
-    unevaluated_exprs = string_to_scheme(string)
-    return [evaluate_sexpression(e, DEFAULT_ENVIRONMENT) for e in unevaluated_exprs]
+    return evaluate_sexpression(string_to_scheme(string), DEFAULT_ENVIRONMENT)
 
 class Procedure(object):
 
