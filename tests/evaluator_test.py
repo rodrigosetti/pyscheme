@@ -96,33 +96,115 @@ class TestEvaluator(unittest.TestCase):
 
     def test_evaluate_expressions(self):
 
+        # built-in procedure application
         result = evaluator.evaluate("(+ 1 2 3)")
         self.assertEquals(6, result[0].value)
 
+        # let special form, environment
         result = evaluator.evaluate("(let ((x 10) (y 20)) (+ x y))")
         self.assertEquals(30, result[0].value)
 
+        # creating and calling procedures
         result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
         self.assertEquals(41, result[0].value)
 
+        # if form
         result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (if (= (inc 40) 41) 3 4))")
         self.assertEquals(3, result[0].value)
 
+        # quoting symbols
         result = evaluator.evaluate("(+ 'a 'b)")
         self.assertEquals('ab', result[0].value)
 
+        # quoting lists
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (car x))")
         self.assertEquals('+', result[0].value)
 
+        # length of a list
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (len x))")
         self.assertEquals(3, result[0].value)
 
+        # using cdr
         result = evaluator.evaluate("(let ((x '(+ 1 2))) (len (cdr x)))")
         self.assertEquals(2, result[0].value)
 
+        # using cons
+        result = evaluator.evaluate("(let ((x (cons 1 2))) (car x))")
+        self.assertEquals(1, result[0].value)
+
+        # using cons
+        result = evaluator.evaluate("(let ((x (cons 1 2))) (cdr x))")
+        self.assertEquals(2, result[0].value)
+
+        # using the () notation
         result = evaluator.evaluate("(len ())")
         self.assertEquals(0, result[0].value)
 
+        # using nil
         result = evaluator.evaluate("(len nil)")
         self.assertEquals(0, result[0].value)
+
+        # using empty list
+        result = evaluator.evaluate("(len (list ))")
+        self.assertEquals(0, result[0].value)
+
+        # using the () notation
+        result = evaluator.evaluate("(empty? ())")
+        self.assertEquals(True, result[0].value)
+
+        # using nil
+        result = evaluator.evaluate("(empty? nil)")
+        self.assertEquals(True, result[0].value)
+
+        # using empty list
+        result = evaluator.evaluate("(empty? (list ))")
+        self.assertEquals(True, result[0].value)
+
+        # variable arguments
+        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1 2 3 4 5))")
+        self.assertEquals(5, result[0].value)
+
+        # variable arguments as optional
+        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1))")
+        self.assertEquals(1, result[0].value)
+
+        # nested environments in let
+        result = evaluator.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
+        self.assertEquals(28, result[0].value)
+
+        # nested environments in lambdas
+        result = evaluator.evaluate("(let ((x 100) (inc (lambda (x) (+ 1 x)))) (+ (inc 7) x))")
+        self.assertEquals(108, result[0].value)
+
+    def test_quicksort(self):
+
+        string = """
+            (let ((filter (lambda (f l)
+                                  (if (empty? l)
+                                      nil
+                                      (if (f (car l))
+                                          (cons (car l) (filter f (cdr l)))
+                                          (filter f (cdr l))))))
+
+                  (join (lambda (x y)
+                                (if (empty? x)
+                                    y
+                                    (cons (car x) (join (cdr x) y)))))
+
+                  (sort (lambda (l)
+                                (if (empty? l)
+                                    nil
+                                    (let ((pivot (car l)))
+                                         (join (sort (filter (lambda (e) (<= e pivot)) (cdr l)))
+                                               (cons pivot
+                                                     (sort (filter (lambda (e) (> e pivot)) (cdr l))))))))))
+
+                 (sort (list 8 6 0 1 5 2 9 3 4 7)))
+        """
+
+        result = evaluator.evaluate(string)
+
+        sorted = result[0]
+        self.assertEquals(10, len(sorted))
+        self.assertEquals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [e.value for e in sorted])
 
