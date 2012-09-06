@@ -143,5 +143,5 @@ class TestParser(unittest.TestCase):
         try:
             self.parser.parse(self.tokenizer.tokens("(add foo bar))"))
         except SyntaxError as s:
-            self.assertEquals("Unexpected ) at line 1, column 20. Expecting end of tokens", s.message)
+            self.assertEquals("Unexpected ) at line 1, column 15. Expecting end of tokens", s.message)
 
