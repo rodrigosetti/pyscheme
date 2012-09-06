@@ -12,12 +12,8 @@ __all__ = ["evaluate", "to_str", "DEFAULT_ENVIRONMENT"]
 MAYBE_INTEGER, MAYBE_STRING, SCAPE_CHAR, STRING, MAYBE_FLOAT, SYMBOL,) = xrange(13)
 
 #: Grammar non-terminal constants enum
-EXPRESSION = 'expression'
-QUOTED_EXPRESSION = "quoted-expression"
-UNQUOTED_EXPRESSION = "unquoted-expression"
-LIST = "list"
-DOTED_EXPRESSION = 'doted-expression'
-ATOM = 'atom'
+(EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION,
+ LIST, DOTED_EXPRESSION, ATOM, PROGRAM,) = xrange(7)
 
 #: reserved words are for special forms. they cannot name anything
 RESERVED_WORDS = ('quote', 'if', 'let', 'lambda', 'define')
@@ -58,11 +54,13 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s",   START),
 SCHEME_TOKENIZER = lexer.Tokenizer(SCHEME_LEX_RULES, start=START)
 
 #: The scheme parser
-SCHEME_PARSER = parser.Parser(start=EXPRESSION)
+SCHEME_PARSER = parser.Parser(start=PROGRAM)
 
 with SCHEME_PARSER as p:
     #: The scheme grammar for the parser
-    SCHEME_GRAMMAR = {EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
+    SCHEME_GRAMMAR = {PROGRAM:             ~p.expression(EXPRESSION),
+
+                      EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
                                            p.expression(ATOM) |
                                            p.expression(LIST),
 
@@ -172,6 +170,8 @@ def tree_to_scheme(tree):
             return tree_to_scheme(tree.value)
         elif tree.name == EXPRESSION:
             return tree_to_scheme(tree.value[0])
+        elif tree.name == PROGRAM:
+            return tree_to_scheme(tree.value[0]) if tree.value else None
         else:
             raise ValueError("Invalid parsed tree element: %s" % tree)
     elif type(tree) == list:
