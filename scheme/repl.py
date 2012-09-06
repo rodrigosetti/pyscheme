@@ -1,11 +1,11 @@
 #! /usr/bin/env python
 # coding: utf-8
 
-from evaluator import evaluate, to_str, DEFAULT_ENVIRONMENT
+from evaluator import evaluate, to_str, make_global_environment
 
 if __name__ == "__main__":
 
-    environment = DEFAULT_ENVIRONMENT
+    environment = make_global_environment()
     while True:
 
         try:

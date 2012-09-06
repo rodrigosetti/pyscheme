@@ -26,6 +26,17 @@ class Buffer(object):
                 self.buffer.append(value)
                 yield value
 
+    def __nonzero__(self):
+        if self.buffer:
+            return True
+        else:
+            try:
+                value = next(self.iterator)
+                self.buffer.append(value)
+                return True
+            except StopIteration:
+                return False
+
     def mark(self):
         return self
 

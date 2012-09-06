@@ -172,6 +172,11 @@ class Parser(object):
 
     def parse(self, tokens):
         tokensBuffer = Buffer(tokens)
+
+        if not tokensBuffer:
+            # buffer is empty
+            return None
+
         result = self.start.match(tokensBuffer, True)
 
         # raise exception if there's something left in the buffer
