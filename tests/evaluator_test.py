@@ -235,3 +235,34 @@ class TestEvaluator(unittest.TestCase):
         result = evaluator.evaluate(string)
         self.assertEquals(5000, result.value)
 
+    def test_lazy_evaluation(self):
+
+        string = """
+            (let ((take-n (lambda (n iterator)
+                                  (let ((next (iterator)))
+                                       (if (= n 0)
+                                           nil
+                                           (cons (cdr next) (take-n (- n 1) (car next)))))))
+                  (make-iter (lambda (start fnext)
+                                     (lambda ()
+                                             (cons (make-iter (fnext start) fnext) start)))))
+
+                  (take-n 100 (make-iter 0 (lambda (e) (+ e 2)))))
+        """
+
+        result = evaluator.evaluate(string)
+        self.assertEquals(range(0, 200, 2), [e.value for e in result])
+
+        string = """
+            (let ((inf-list (lambda (n)
+                                    (cons n
+                                          (inf-list (+ n 1)))))
+
+                  (my-list (inf-list 1)))
+
+                  (or #f (> 1 2) (> 2 1) my-list #f))
+        """
+
+        result = evaluator.evaluate(string)
+        self.assertEquals(True, result.value)
+
