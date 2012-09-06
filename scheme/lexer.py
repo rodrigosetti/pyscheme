@@ -58,6 +58,9 @@ class Token(object):
         self.line = line
         self.column = column
 
+    def __nonzero__(self):
+        return bool(self.value)
+
     def __repr__(self):
         return '<Token %s "%s">' % (self.type, self.value)
 

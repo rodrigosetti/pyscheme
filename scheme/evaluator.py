@@ -5,7 +5,7 @@ from lexer import Token
 from parser import Element
 import lexer, parser
 
-__all__ = ["evaluate", "to_str", "DEFAULT_ENVIRONMENT"]
+__all__ = ["evaluate", "to_str"]
 
 #: Lex states constants enum
 (START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, INTEGER_OR_SYMBOL,
@@ -126,6 +126,20 @@ cons = lambda a,b: Pair(a,b)
 car = lambda x: x.first
 cdr = lambda x: x.second
 
+class SymbolData(object):
+    """
+    Represent a piece of information associated to a symbol in the environment
+    """
+    def __init__(self, expression, environment, is_evaluated=False):
+        self.expression = expression
+        self.environment = environment
+        self.is_evaluated = is_evaluated
+
+    def evaluate(self):
+        self.expression = evaluate_sexpression(self.expression, self.environment)
+        self.is_evaluated = True
+        return self
+
 class Environment(dict):
     """
     Hierarchical dictionary
@@ -134,12 +148,31 @@ class Environment(dict):
     def __init__(self, parent=None):
         self.parent = parent
 
-    def __getitem__(self, x):
+    def add(self, name, expression, environment=None, is_evaluated=False):
+        """
+        Adds an expression and the environment it's supposed to be
+        evaluated
+        """
+        super(Environment, self).__setitem__(name, SymbolData(expression, environment, is_evaluated))
+
+    def __setitem__(self, *args):
+        raise ValueError("Please use .add method to add stuff to environment")
+
+    def __getitem__(self, name):
+        """
+        Get expression evaluated from the hierarchy
+        """
         try:
-            return super(Environment, self).__getitem__(x)
+            symbol_data = super(Environment, self).__getitem__(name)
+            if type(symbol_data) == SymbolData:
+                if not symbol_data.is_evaluated:
+                    super(Environment, self).__setitem__(name, symbol_data.evaluate())
+                return symbol_data.expression
+            else:
+                return symbol_data
         except KeyError as e:
             if self.parent is not None:
-                return self.parent[x]
+                return self.parent[name]
             else:
                 raise e
 
@@ -212,9 +245,10 @@ def evaluate(string, environment=None):
 
 class TailCall(Exception):
 
-    def __init__(self, arguments):
+    def __init__(self, arguments, caller_environment):
         super(TailCall, self).__init__()
         self.arguments = arguments
+        self.caller_environment = caller_environment
 
 class Procedure(object):
 
@@ -224,7 +258,7 @@ class Procedure(object):
         self.expression = expression
         self.environment = environment
 
-    def __call__(self, arguments):
+    def __call__(self, arguments, caller_environment):
 
         while True:
             # create a sub-environment
@@ -236,13 +270,14 @@ class Procedure(object):
                     raise SyntaxError("Too few arguments for procedure. should be at least %d" % len(self.params_names))
 
                 # name unevaluated expression argument in procedure environment
-                procedure_env[name] = cur_arg.first
+                procedure_env.add(name, cur_arg.first, caller_environment)
 
                 cur_arg = cur_arg.second
 
             # if there is a variable param name, name it to the rest of arguments
             if self.variable_param:
-                procedure_env[self.variable_param] = cur_arg
+                variable = cons(Token('list', 'SYMBOL'), cur_arg)
+                procedure_env.add(self.variable_param, variable, caller_environment)
             elif cur_arg is not None:
                 # there's no variable params and there still arguments (too much arguments)
                 raise SyntaxError("Too much arguments for procedure. should be %d" % len(self.params_names))
@@ -253,6 +288,7 @@ class Procedure(object):
                 return evaluate_sexpression(self.expression, procedure_env, procedure_context=self)
             except TailCall as t:
                 arguments = t.arguments
+                caller_environment = t.caller_environment
                 continue
 
             break
@@ -279,7 +315,7 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     if not is_symbol(expression[1]):
                         raise SyntaxError("The first part of define expression should be a symbol. At line %d, column %d" % (head.line, head.column))
 
-                    environment[expression[1].value] = evaluate_sexpression(expression[2], environment)
+                    environment.add(expression[1].value, expression[2], environment)
                     return expression[1]
                 elif head.value == 'let':
                     # evaluate let expression:
@@ -299,7 +335,7 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                             raise SyntaxError("The first part of definition number %d of let expression should be a symbol. At line %d, column %d" % (n, head.line, head.column))
 
                         # name evaluated expression in current sub-environment
-                        sub_environment[definition[0].value] = evaluate_sexpression(definition[1], sub_environment)
+                        sub_environment.add(definition[0].value, definition[1], sub_environment)
 
                     # finally, evaluate the let expression with the populated sub-environment
                     return evaluate_sexpression(expression[2], sub_environment, procedure_context)
@@ -352,25 +388,21 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     raise SyntaxError("Could not call symbol head of s-expression at line %d, column %d" % (head.line, head.column))
             else:
                 # head of s-expression is not a symbol (i.e. a number, string, etc.)
-                raise SyntaxError("Could not call non-symbol head of s-expression at line %d, column %d" % (head.line, head.column))
+                raise SyntaxError("Could not call non-symbol %s of s-expression at line %d, column %d" % (head, head.line, head.column))
         elif callable(head):
             # it's a procedure (evaluated from lambda) or a built-in
 
-            # evaluate arguments before calling
-            if is_pair(expression.second):
-                arguments = create_list([evaluate_sexpression(e, environment) for e in expression.second])
-            else:
-                arguments = expression.second
+            arguments = expression.second
 
             # call procedure with evaluated arguments
             if head == procedure_context:
                 # tail call
-                raise TailCall(arguments)
+                raise TailCall(arguments, environment)
 
-            return head(arguments)
+            return head(arguments, environment)
         else:
             # head of s-expression is not an atom
-            raise SyntaxError("Could not call non-atom head of s-expression at line %d, column %d" % (head.line, head.column))
+            raise SyntaxError("Could not call non-atom %s of s-expression at line %d, column %d" % (head, head.line, head.column))
 
     elif is_atom(expression):
         # expression is atom
@@ -396,35 +428,48 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
         # expression is not a token, pair, nil or procedure (???)
         raise ValueError("Invalid expression: %s" % expression)
 
+def evaluate_args(procedure):
+    "evaluate arguments decorator"
+
+    def eval_arg_procedure(arguments, environment):
+        if is_pair(arguments):
+            arguments = create_list([evaluate_sexpression(e, environment) for e in arguments])
+
+        return procedure(arguments, environment)
+
+    return eval_arg_procedure
+
 def make_global_environment():
     """
     Return the default global environment, with built-in procedures and values
     """
     environment = Environment()
     environment.update({
-        'nil': None,
-        '#t': True,
-        '#f': False,
-        '+': lambda args:    Token(reduce(operator.add,  (e.value for e in args))),
-        '-': lambda args:    Token(reduce(operator.sub,  (e.value for e in args))),
-        '*': lambda args:    Token(reduce(operator.mul,  (e.value for e in args))),
-        '/': lambda args:    Token(reduce(operator.div,  (e.value for e in args))),
-        'mod': lambda args:  Token(reduce(operator.mod,  (e.value for e in args))),
-        'or': lambda args:   Token(reduce(operator.or_,  (e.value for e in args)),  'BOOLEAN'),
-        'and': lambda args:  Token(reduce(operator.and_, (e.value for e in args)),  'BOOLEAN'),
-        'not': lambda args:  Token(reduce(operator.not_, (e.value for e in args)),  'BOOLEAN'),
-        'eq?': lambda args:  Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN'),
-        '=': lambda args:    Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN'),
-        '<': lambda args:    Token(reduce(operator.lt,   (e.value for e in args)),  'BOOLEAN'),
-        '>': lambda args:    Token(reduce(operator.gt,   (e.value for e in args)),  'BOOLEAN'),
-        '<=': lambda args:   Token(reduce(operator.le,   (e.value for e in args)),  'BOOLEAN'),
-        '>=': lambda args:   Token(reduce(operator.ge,   (e.value for e in args)),  'BOOLEAN'),
-        'nil?': lambda args: Token(car(args) == None, 'BOOLEAN'),
-        'atom?': lambda args: Token(is_atom(car(args)), 'BOOLEAN'),
-        'len': lambda args:  Token(len(car(args)) if car(args) is not None else 0, 'INTEGER'),
-        'list': lambda args: args,
-        'cons': lambda args: cons(car(args), car(cdr(args))),
-        'car': lambda args:  car(car(args)),
-        'cdr': lambda args:  cdr(car(args))})
+        'nil':   None,
+        '#t':    Token(True, 'BOOLEAN'),
+        '#f':    Token(False, 'BOOLEAN'),
+        '+':     evaluate_args(lambda args, env: Token(reduce(operator.add,  (e.value for e in args)))),
+        '-':     evaluate_args(lambda args, env: Token(reduce(operator.sub,  (e.value for e in args)))),
+        '*':     evaluate_args(lambda args, env: Token(reduce(operator.mul,  (e.value for e in args)))),
+        '/':     evaluate_args(lambda args, env: Token(reduce(operator.div,  (e.value for e in args)))),
+        'mod':   evaluate_args(lambda args, env: Token(reduce(operator.mod,  (e.value for e in args)))),
+        'not':   evaluate_args(lambda args, env: Token(reduce(operator.not_, (e.value for e in args)),  'BOOLEAN')),
+        'eq?':   evaluate_args(lambda args, env: Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN')),
+        '=':     evaluate_args(lambda args, env: Token(reduce(operator.eq,   (e.value for e in args)),  'BOOLEAN')),
+        '<':     evaluate_args(lambda args, env: Token(reduce(operator.lt,   (e.value for e in args)),  'BOOLEAN')),
+        '>':     evaluate_args(lambda args, env: Token(reduce(operator.gt,   (e.value for e in args)),  'BOOLEAN')),
+        '<=':    evaluate_args(lambda args, env: Token(reduce(operator.le,   (e.value for e in args)),  'BOOLEAN')),
+        '>=':    evaluate_args(lambda args, env: Token(reduce(operator.ge,   (e.value for e in args)),  'BOOLEAN')),
+        'and':   evaluate_args(lambda args, env: Token(all(e.value for e in args),  'BOOLEAN')),
+        'or':    lambda args, env: Token(any(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN'),
+        'nil?':  evaluate_args(lambda args, env: Token(car(args) == None,  'BOOLEAN')),
+        'atom?': evaluate_args(lambda args, env: Token(is_atom(car(args)), 'BOOLEAN')),
+        'len':   evaluate_args(lambda args, env: Token(len(car(args)) if car(args) is not None else 0, 'INTEGER')),
+        'list':  evaluate_args(lambda args, env: args),
+        'cons':  evaluate_args(lambda args, env: cons(car(args), car(cdr(args)))),
+        'car':   evaluate_args(lambda args, env: car(car(args))),
+        'cdr':   evaluate_args(lambda args, env: cdr(car(args))),
+        'eval':  lambda args, env: evaluate_sexpression(args, env),
+    })
     return environment
 
