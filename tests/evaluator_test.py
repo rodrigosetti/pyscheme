@@ -149,15 +149,15 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(0, result[0].value)
 
         # using the () notation
-        result = evaluator.evaluate("(empty? ())")
+        result = evaluator.evaluate("(nil? ())")
         self.assertEquals(True, result[0].value)
 
         # using nil
-        result = evaluator.evaluate("(empty? nil)")
+        result = evaluator.evaluate("(nil? nil)")
         self.assertEquals(True, result[0].value)
 
         # using empty list
-        result = evaluator.evaluate("(empty? (list ))")
+        result = evaluator.evaluate("(nil? (list ))")
         self.assertEquals(True, result[0].value)
 
         # variable arguments
@@ -176,23 +176,31 @@ class TestEvaluator(unittest.TestCase):
         result = evaluator.evaluate("(let ((x 100) (inc (lambda (x) (+ 1 x)))) (+ (inc 7) x))")
         self.assertEquals(108, result[0].value)
 
+        # atom?
+        result = evaluator.evaluate("(atom? 'x)")
+        self.assertEquals(True, result[0].value)
+
+        # atom?
+        result = evaluator.evaluate("(atom? '(1 2 3 4 5))")
+        self.assertEquals(False, result[0].value)
+
     def test_quicksort(self):
 
         string = """
             (let ((filter (lambda (f l)
-                                  (if (empty? l)
+                                  (if (nil? l)
                                       nil
                                       (if (f (car l))
                                           (cons (car l) (filter f (cdr l)))
                                           (filter f (cdr l))))))
 
                   (join (lambda (x y)
-                                (if (empty? x)
+                                (if (nil? x)
                                     y
                                     (cons (car x) (join (cdr x) y)))))
 
                   (sort (lambda (l)
-                                (if (empty? l)
+                                (if (nil? l)
                                     nil
                                     (let ((pivot (car l)))
                                          (join (sort (filter (lambda (e) (<= e pivot)) (cdr l)))
