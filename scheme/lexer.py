@@ -44,7 +44,7 @@ class Token(object):
     A representation of a Token.
     """
 
-    def __init__(self, value, type, line=None, column=None):
+    def __init__(self, value, type='ANY', line=None, column=None):
         if type == 'STRING':
             self.value = eval(value)
         elif type == 'INTEGER':
