@@ -13,6 +13,6 @@ if __name__ == "__main__":
         except EOFError:
             print "\nexiting..."
             break
-        except SyntaxError as e:
+        except Exception as e:
             print e.message
 

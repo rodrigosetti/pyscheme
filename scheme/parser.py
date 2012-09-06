@@ -143,7 +143,8 @@ class Token(Expression):
 
         if mandatory:
             if next_token:
-                raise SyntaxError('Expecting %s, but found %s. At line %d, column %d' % (self, next_token.value, next_token.line, next_token.column))
+                raise SyntaxError('Expecting %s, but found %s. At line %d, column %d' %
+                                  (self, next_token.value, next_token.line, next_token.column))
             else:
                 raise SyntaxError('Unexpected end of input. Expecting %s' % self)
 
@@ -181,7 +182,8 @@ class Parser(object):
 
         # raise exception if there's something left in the buffer
         for token in tokens:
-            raise SyntaxError("Unexpected %s at line %d, column %d. Expecting end of tokens" % (token.value, token.line, token.column))
+            raise SyntaxError("Unexpected %s at line %d, column %d. Expecting end of tokens" %
+                              (token.value, token.line, token.column))
 
         if result.matches == True:
             return result.tree[0]
