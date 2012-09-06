@@ -44,7 +44,7 @@ class Token(object):
     A representation of a Token.
     """
 
-    def __init__(self, value, type, line=None, column=None):
+    def __init__(self, value, type='ANY', line=None, column=None):
         if type == 'STRING':
             self.value = eval(value)
         elif type == 'INTEGER':
@@ -117,15 +117,15 @@ class Tokenizer(object):
                     # consume char - match next char
                     consume = True
 
-                # count lines and columns
-                if char == '\n':
-                    line += 1
-                    column = 1
-                else:
-                    column += 1
-
                 if consume:
                     break
+
+            # count lines and columns
+            if char == '\n':
+                line += 1
+                column = 1
+            else:
+                column += 1
 
         # try to recognize the last token, if there's buffer
         if token_buffer:
