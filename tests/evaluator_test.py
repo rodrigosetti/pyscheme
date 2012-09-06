@@ -73,15 +73,15 @@ class TestEvaluator(unittest.TestCase):
     def test_nil_value(self):
 
         # using nil
-        result = evaluator.string_to_scheme('nil')
+        result = evaluator.evaluate('nil')
         self.compare_result(None, result)
 
         # using the () notation
-        result = evaluator.string_to_scheme('()')
+        result = evaluator.evaluate('()')
         self.compare_result(None, result)
 
-        # using the () notation
-        result = evaluator.string_to_scheme('()')
+        # using the (list) notation
+        result = evaluator.evaluate('(list)')
         self.compare_result(None, result)
 
         # using the () notation
@@ -218,4 +218,20 @@ class TestEvaluator(unittest.TestCase):
 
         self.assertEquals(10, len(result))
         self.assertEquals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [e.value for e in result])
+
+    def test_tail_call_optimization(self):
+
+        string = """
+            (let ((inc-to-5000 (lambda ()
+                                       (let ((iter (lambda (x)
+                                                           (if (>= x 5000)
+                                                                x
+                                                                (iter (+ 1 x))))))
+                                            (iter 1)))))
+                 (inc-to-5000))
+        """
+
+        # without tail-call this should reach maximum recursion depth
+        result = evaluator.evaluate(string)
+        self.assertEquals(5000, result.value)
 
