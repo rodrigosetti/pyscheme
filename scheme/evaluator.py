@@ -5,7 +5,7 @@ from lexer import Token
 from parser import Element
 import lexer, parser
 
-__all__ = ["evaluate"]
+__all__ = ["evaluate", "to_str", "DEFAULT_ENVIRONMENT"]
 
 #: Lex states constants enum
 (START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, INTEGER_OR_SYMBOL,
@@ -20,7 +20,7 @@ DOTED_EXPRESSION = 'doted-expression'
 ATOM = 'atom'
 
 #: reserved words are for special forms. they cannot name anything
-RESERVED_WORDS = ('quote', 'if', 'let', 'lambda')
+RESERVED_WORDS = ('quote', 'if', 'let', 'lambda', 'define')
 
 #: Rules for the scheme lexical analyzer
 SCHEME_LEX_RULES = {START: lexer.State([(r"\s",   START),
@@ -122,13 +122,33 @@ class Pair(object):
         raise IndexError("Index out of range")
 
 # predicates
-is_atom = lambda x: type(x) == Token
-is_symbol = lambda x: is_atom(x) and x.type == 'SYMBOL'
+is_atom = lambda x: x is None or type(x) == Token
+is_symbol = lambda x: x is not None and is_atom(x) and x.type == 'SYMBOL'
 is_pair  = lambda x: type(x) == Pair
 
 cons = lambda a,b: Pair(a,b)
 car = lambda x: x.first
 cdr = lambda x: x.second
+
+class Environment(dict):
+    """
+    Hierarchical dictionary
+    """
+
+    def __init__(self, parent=None):
+        self.parent = parent
+
+    def __getitem__(self, x):
+        try:
+            return super(Environment, self).__getitem__(x)
+        except KeyError as e:
+            if self.parent:
+                return self.parent[x]
+            else:
+                raise e
+
+#: The default global environment
+DEFAULT_ENVIRONMENT = Environment()
 
 def create_list(expressions):
     if len(expressions) == 0:
@@ -170,11 +190,28 @@ def string_to_scheme(string):
 
     return tree_to_scheme(SCHEME_PARSER.parse(SCHEME_TOKENIZER.tokens(string)))
 
-def evaluate(string):
+def to_str(expression):
+    "Trasforms a s-expression into a string"
+    if expression is None:
+        return 'nil'
+    elif is_atom(expression):
+        return repr(expression.value) if expression.type == 'STRING' else str(expression.value)
+    elif callable(expression):
+        return "<procedure>"
+    elif is_pair(expression):
+        s = "(" + ' '.join([to_str(e) for e in expression])
+        t = expression.terminal()
+        if t is not None:
+            s += " . %s" % to_str(t)
+        return s + ")"
+    else:
+        raise ValueError("Invalid expression: %s" % expression)
+
+def evaluate(string, environment=DEFAULT_ENVIRONMENT):
     """
     Evaluate program string, returning a s-expression result
     """
-    return evaluate_sexpression(string_to_scheme(string), DEFAULT_ENVIRONMENT)
+    return evaluate_sexpression(string_to_scheme(string), environment)
 
 class Procedure(object):
 
@@ -207,30 +244,13 @@ class Procedure(object):
         # with parameters
         return evaluate_sexpression(self.expression, procedure_env)
 
-class Environment(dict):
-    """
-    Hierarchical dictionary
-    """
-
-    def __init__(self, parent=None):
-        self.parent = parent
-
-    def __getitem__(self, x):
-        try:
-            return super(Environment, self).__getitem__(x)
-        except KeyError as e:
-            if self.parent:
-                return self.parent[x]
-            else:
-                raise e
-
 def evaluate_sexpression(expression, environment):
 
     if is_pair(expression):
         # evaluate head
         head = evaluate_sexpression(expression.first, environment)
-        if type(head) == Token:
-            if head.type == 'SYMBOL':
+        if is_atom(head):
+            if is_symbol(head):
                 if head.value == 'quote':
                     # return the quoted expression unevaluated
                     quoted = expression.second
@@ -238,6 +258,16 @@ def evaluate_sexpression(expression, environment):
                         SyntaxError("quote expression should have two parts at line %d, column %d" % (head.line, head.column))
 
                     return quoted.first
+                elif head.value == 'define':
+                    # this is mostly to be used in REPL
+                    # (define <symbol> <expression>)
+                    if len(expression) != 3:
+                        raise SyntaxError("Define expression should have three parts at line %d, column %d" % (head.line, head.column))
+                    if not is_symbol(expression[1]):
+                        raise SyntaxError("The first part of define expression should be a symbol. At line %d, column %d" % (head.line, head.column))
+
+                    environment[expression[1].value] = evaluate_sexpression(expression[2], environment)
+                    return expression[1]
                 elif head.value == 'let':
                     # evaluate let expression:
                     # (let ( (<symbol> <expression>)* ) <expression>)
@@ -318,10 +348,10 @@ def evaluate_sexpression(expression, environment):
             # head of s-expression is not an atom
             raise SyntaxError("Could not call non-atom head of s-expression at line %d, column %d" % (head.line, head.column))
 
-    elif type(expression) == Token:
+    elif is_atom(expression):
         # expression is atom
 
-        if expression.type == 'SYMBOL':
+        if is_symbol(expression):
             if expression.value not in RESERVED_WORDS:
                 # read (and evaluate, if not) from environment
 
@@ -332,18 +362,17 @@ def evaluate_sexpression(expression, environment):
                                       (expression.value, expression.line, expression.column))
 
         # return unevaluated token of the special form
-        # or the numeric value
+        # or the numeric or None value
         return expression
 
-    elif expression is None or callable(expression):
-        # return the unevaluated procedure or None (nil)
+    elif callable(expression):
+        # return the unevaluated procedure
         return expression
     else:
         # expression is not a token, pair, nil or procedure (???)
         raise ValueError("Invalid expression: %s" % expression)
 
 # define the DEFAULT_ENVIRONMENT
-DEFAULT_ENVIRONMENT = Environment()
 DEFAULT_ENVIRONMENT.update({
     '+': lambda args:    Token(reduce(operator.add,  (e.value for e in args))),
     '-': lambda args:    Token(reduce(operator.sub,  (e.value for e in args))),
