@@ -9,7 +9,7 @@ __all__ = ["evaluate", "to_str"]
 
 #: Lex states constants enum
 (START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, INTEGER_OR_SYMBOL,
-MAYBE_INTEGER, MAYBE_STRING, SCAPE_CHAR, STRING, MAYBE_FLOAT, SYMBOL,) = xrange(13)
+MAYBE_INTEGER, STRING_OPEN, STRING_BODY, STRING_CLOSE, SCAPE_CHAR, MAYBE_FLOAT, SYMBOL,) = xrange(14)
 
 #: Grammar non-terminal constants enum
 (EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION,
@@ -27,7 +27,7 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s",   START),
                                         (r"\.", MAYBE_DOT),
                                         (r"-",  INTEGER_OR_SYMBOL),
                                         (r"\d", MAYBE_INTEGER),
-                                        (r'"',  MAYBE_STRING),
+                                        (r'"',  STRING_OPEN),
                                         (r".",  SYMBOL)], discard=True),
                     COMMENT: lexer.State([(r"\n",  START),
                                             (r".", COMMENT)], discard=True),
@@ -41,11 +41,13 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s",   START),
                     MAYBE_INTEGER: lexer.State([(r"\d", MAYBE_INTEGER),
                                                   (r"\.", MAYBE_FLOAT),
                                                   (r"[^\(\)\s;]", SYMBOL)], token='INTEGER'),
-                    MAYBE_STRING: lexer.State([(r'[^"\\]', MAYBE_STRING),
+                    STRING_OPEN: lexer.State([(r'[^"\\]', STRING_BODY),
+                                                 (r'\\', SCAPE_CHAR)], discard=True),
+                    STRING_BODY: lexer.State([(r'[^"\\]', STRING_BODY),
                                                  (r'\\', SCAPE_CHAR),
-                                                 (r'"', STRING)]),
-                    SCAPE_CHAR: lexer.State([(r'.', MAYBE_STRING)]),
-                    STRING: lexer.State(token='SYMBOL'),
+                                                 (r'"', STRING_CLOSE)]),
+                    SCAPE_CHAR: lexer.State([(r'.', STRING_BODY)]),
+                    STRING_CLOSE: lexer.State(token='SYMBOL', discard=True),
                     MAYBE_FLOAT: lexer.State([(r"\d", MAYBE_FLOAT),
                                                 (r"[^\(\)\s;]", SYMBOL)], token='FLOAT'),
                     SYMBOL: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='SYMBOL')}
