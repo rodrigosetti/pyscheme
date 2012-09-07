@@ -247,11 +247,11 @@ class TestEvaluator(unittest.TestCase):
                                      (lambda ()
                                              (cons (make-iter (fnext start) fnext) start)))))
 
-                  (take-n 100 (make-iter 0 (lambda (e) (+ e 2)))))
+                  (take-n 50 (make-iter 0 (lambda (e) (+ e 2)))))
         """
 
         result = evaluator.evaluate(string)
-        self.assertEquals(range(0, 200, 2), [e.value for e in result])
+        self.assertEquals(range(0, 100, 2), [e.value for e in result])
 
         string = """
             (let ((inf-list (lambda (n)

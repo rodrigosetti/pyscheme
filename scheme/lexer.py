@@ -58,6 +58,10 @@ class Token(object):
         self.line = line
         self.column = column
 
+    def location_str(self):
+        if self.line and self.column:
+            return "at line %d, column %d" % (self.line, self.column)
+
     def __nonzero__(self):
         return bool(self.value)
 
