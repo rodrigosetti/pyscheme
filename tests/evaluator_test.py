@@ -133,11 +133,11 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(30, result.value)
 
         # creating and calling procedures
-        result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
+        result = evaluator.evaluate("(let ((inc (λ (x) (+ x 1)))) (inc 40))")
         self.assertEquals(41, result.value)
 
         # if form
-        result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (if (= (inc 40) 41) 3 4))")
+        result = evaluator.evaluate("(let ((inc (λ (x) (+ x 1)))) (if (= (inc 40) 41) 3 4))")
         self.assertEquals(3, result.value)
 
         # quoting symbols
@@ -165,11 +165,11 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(2, result.value)
 
         # variable arguments
-        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(let ((n-of-args (λ (a . b) (+ (len b) a)))) (n-of-args 1 2 3 4 5))")
         self.assertEquals(5, result.value)
 
         # variable arguments as optional
-        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) a)))) (n-of-args 1))")
+        result = evaluator.evaluate("(let ((n-of-args (λ (a . b) (+ (len b) a)))) (n-of-args 1))")
         self.assertEquals(1, result.value)
 
         # nested environments in let
@@ -177,7 +177,7 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(28, result.value)
 
         # nested environments in lambdas
-        result = evaluator.evaluate("(let ((x 100) (inc (lambda (x) (+ 1 x)))) (+ (inc 7) x))")
+        result = evaluator.evaluate("(let ((x 100) (inc (λ (x) (+ 1 x)))) (+ (inc 7) x))")
         self.assertEquals(108, result.value)
 
         # atom?
@@ -191,25 +191,25 @@ class TestEvaluator(unittest.TestCase):
     def test_quicksort(self):
 
         string = """
-            (let ((filter (lambda (f l)
-                                  (if (nil? l)
-                                      nil
-                                      (if (f (car l))
-                                          (cons (car l) (filter f (cdr l)))
-                                          (filter f (cdr l))))))
+            (let ((filter (λ (f l)
+                             (if (nil? l)
+                                 nil
+                                 (if (f (car l))
+                                     (cons (car l) (filter f (cdr l)))
+                                     (filter f (cdr l))))))
 
-                  (join (lambda (x y)
-                                (if (nil? x)
-                                    y
-                                    (cons (car x) (join (cdr x) y)))))
+                  (join (λ (x y)
+                           (if (nil? x)
+                               y
+                               (cons (car x) (join (cdr x) y)))))
 
-                  (sort (lambda (l)
-                                (if (nil? l)
-                                    nil
-                                    (let ((pivot (car l)))
-                                         (join (sort (filter (lambda (e) (<= e pivot)) (cdr l)))
-                                               (cons pivot
-                                                     (sort (filter (lambda (e) (> e pivot)) (cdr l))))))))))
+                  (sort (λ (l)
+                           (if (nil? l)
+                               nil
+                               (let ((pivot (car l)))
+                                    (join (sort (filter (λ (e) (<= e pivot)) (cdr l)))
+                                          (cons pivot
+                                                (sort (filter (λ (e) (> e pivot)) (cdr l))))))))))
 
                  (sort (list 8 6 0 1 5 2 9 3 4 7)))
         """
@@ -222,12 +222,12 @@ class TestEvaluator(unittest.TestCase):
     def test_tail_call_optimization(self):
 
         string = """
-            (let ((inc-to-5000 (lambda ()
-                                       (let ((iter (lambda (x)
-                                                           (if (>= x 5000)
-                                                                x
-                                                                (iter (+ 1 x))))))
-                                            (iter 1)))))
+            (let ((inc-to-5000 (λ ()
+                                  (let ((iter (λ (x)
+                                                 (if (>= x 5000)
+                                                      x
+                                                      (iter (+ 1 x))))))
+                                       (iter 1)))))
                  (inc-to-5000))
         """
 
@@ -238,25 +238,25 @@ class TestEvaluator(unittest.TestCase):
     def test_lazy_evaluation(self):
 
         string = """
-            (let ((take-n (lambda (n iterator)
-                                  (let ((next (iterator)))
-                                       (if (= n 0)
-                                           nil
-                                           (cons (cdr next) (take-n (- n 1) (car next)))))))
-                  (make-iter (lambda (start fnext)
-                                     (lambda ()
-                                             (cons (make-iter (fnext start) fnext) start)))))
+            (let ((take-n (λ (n iterator)
+                             (let ((next (iterator)))
+                                  (if (= n 0)
+                                      nil
+                                      (cons (cdr next) (take-n (- n 1) (car next)))))))
+                  (make-iter (λ (start fnext)
+                                (λ ()
+                                   (cons (make-iter (fnext start) fnext) start)))))
 
-                  (take-n 50 (make-iter 0 (lambda (e) (+ e 2)))))
+                  (take-n 50 (make-iter 0 (λ (e) (+ e 2)))))
         """
 
         result = evaluator.evaluate(string)
         self.assertEquals(range(0, 100, 2), [e.value for e in result])
 
         string = """
-            (let ((inf-list (lambda (n)
-                                    (cons n
-                                          (inf-list (+ n 1)))))
+            (let ((inf-list (λ (n)
+                               (cons n
+                                     (inf-list (+ n 1)))))
 
                   (my-list (inf-list 1)))
 

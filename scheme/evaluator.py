@@ -16,10 +16,10 @@ MAYBE_INTEGER, STRING_OPEN, STRING_BODY, STRING_CLOSE, SCAPE_CHAR, MAYBE_FLOAT, 
  LIST, DOTED_EXPRESSION, ATOM,) = xrange(6)
 
 #: reserved words are for special forms. they cannot name anything
-RESERVED_WORDS = ('quote', 'if', 'let', 'lambda', 'define')
+RESERVED_WORDS = ('quote', 'define', 'let', 'lambda', 'λ',)
 
 #: Rules for the scheme lexical analyzer
-SCHEME_LEX_RULES = {START: lexer.State([(r"\s",   START),
+SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
                                         (r";",  COMMENT),
                                         (r"'",  QUOTE),
                                         (r"\(", LPAREN),
@@ -261,7 +261,7 @@ class Procedure(object):
         self.expression = expression
         self.environment = environment
 
-    def __call__(self, arguments, caller_environment):
+    def __call__(self, arguments, caller_environment, procedure_context=None):
 
         while True:
             # create a sub-environment
@@ -280,7 +280,7 @@ class Procedure(object):
 
             # if there is a variable param name, name it to the rest of arguments
             if self.variable_param:
-                variable = cons(lambda args,env: args, cur_arg)
+                variable = cons(lambda args,env,pc: args, cur_arg)
                 procedure_env.add(self.variable_param, variable, caller_environment)
             elif cur_arg is not None:
                 # there's no variable params and there still arguments (too much arguments)
@@ -356,7 +356,7 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # finally, evaluate the let expression with the populated sub-environment
                     return evaluate_sexpression(expression[2], sub_environment, procedure_context)
 
-                elif head.value == 'lambda':
+                elif head.value == 'lambda' or head.value == 'λ':
                     # evalualte lambda expression
                     # (lambda ( <symbol>* ) <expression>)
                     if len(expression) != 3:
@@ -388,23 +388,6 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                     # the current environment in which lambda was evaluated
                     return Procedure(params_names, variable_param, lambda_expr, environment)
 
-                elif head.value == 'if':
-                    # evaluate if expression
-                    # (if <expression> <expression> <expression>)
-                    if len(expression) != 4:
-                        raise SyntaxError("If form should have three parts %s" %
-                                          head.location_str())
-
-                    condition = evaluate_sexpression(expression[1], environment)
-                    if type(condition) != Token:
-                        raise RuntimeError("Condition of if form didn't evaluate to token %s" %
-                                           head.location_str())
-
-                    # return the consequence or alternative depending on the thruth value of condition
-                    if condition.value:
-                        return evaluate_sexpression(expression[2], environment, procedure_context)
-                    else:
-                        return evaluate_sexpression(expression[3], environment, procedure_context)
                 else:
                     raise RuntimeError('Symbolic value "%s" is not a procedure, line %d, column %d' %
                                        (to_str(head), head.line, head.column))
@@ -422,7 +405,7 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
                 # tail call
                 raise TailCall(arguments, environment)
 
-            return head(arguments, environment)
+            return head(arguments, environment, procedure_context)
         else:
             # head of s-expression is not an atom
             raise RuntimeError('Non-atom "%s" is not a procedure.' % to_str(head))
@@ -451,13 +434,13 @@ def evaluate_sexpression(expression, environment, procedure_context=None):
 def evaluate_args(procedure):
     "evaluate arguments decorator"
 
-    def eval_arg_procedure(arguments, environment):
+    def eval_arg_procedure(arguments, environment, procedure_context):
         if is_pair(arguments):
             arguments = create_list([evaluate_sexpression(e, environment) for e in arguments])
         else:
             arguments = evaluate_sexpression(arguments, environment)
 
-        return procedure(arguments, environment)
+        return procedure(arguments, environment, procedure_context)
 
     return eval_arg_procedure
 
@@ -490,28 +473,31 @@ def make_global_environment():
         'nil':   None,
         '#t':    Token(True, 'BOOLEAN'),
         '#f':    Token(False, 'BOOLEAN'),
-        '+':     min_args(2, evaluate_args(lambda args, env: Token(reduce(operator.add, (e.value for e in args))))),
-        '-':     min_args(2, evaluate_args(lambda args, env: Token(reduce(operator.sub, (e.value for e in args))))),
-        '*':     min_args(2, evaluate_args(lambda args, env: Token(reduce(operator.mul, (e.value for e in args))))),
-        '/':     min_args(2, evaluate_args(lambda args, env: Token(reduce(operator.div, (e.value for e in args))))),
-        'not':   fix_args(1, evaluate_args(lambda args, env: Token(not args[0].value, 'BOOLEAN'))),
-        'mod':   fix_args(2, evaluate_args(lambda args, env: Token(reduce(operator.mod,  (e.value for e in args))))),
-        'eq?':   fix_args(2, evaluate_args(lambda args, env: Token(args[0].value is args[1].value,  'BOOLEAN'))),
-        '=':     fix_args(2, evaluate_args(lambda args, env: Token(args[0].value == args[1].value,  'BOOLEAN'))),
-        '<':     fix_args(2, evaluate_args(lambda args, env: Token(args[0].value <  args[1].value,  'BOOLEAN'))),
-        '>':     fix_args(2, evaluate_args(lambda args, env: Token(args[0].value >  args[1].value,  'BOOLEAN'))),
-        '<=':    fix_args(2, evaluate_args(lambda args, env: Token(args[0].value <= args[1].value,  'BOOLEAN'))),
-        '>=':    fix_args(2, evaluate_args(lambda args, env: Token(args[0].value >= args[1].value,  'BOOLEAN'))),
-        'and':   min_args(2, evaluate_args(lambda args, env: Token(all(e.value for e in args),  'BOOLEAN'))),
-        'or':    min_args(2, lambda args, env: Token(any(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN')),
-        'nil?':  fix_args(1, evaluate_args(lambda args, env: Token(car(args) == None,  'BOOLEAN'))),
-        'atom?': fix_args(1, evaluate_args(lambda args, env: Token(is_atom(car(args)), 'BOOLEAN'))),
-        'len':   fix_args(1, evaluate_args(lambda args, env: Token(len(car(args)) if car(args) is not None else 0, 'INTEGER'))),
-        'car':   fix_args(1, evaluate_args(lambda args, env: car(car(args)))),
-        'cdr':   fix_args(1, evaluate_args(lambda args, env: cdr(car(args)))),
-        'cons':  fix_args(2, evaluate_args(lambda args, env: cons(car(args), car(cdr(args))))),
-        'eval':  lambda args, env: evaluate_sexpression(args, env),
-        'list':  evaluate_args(lambda args, env: args),
+        '+':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.add, (e.value for e in args))))),
+        '-':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.sub, (e.value for e in args))))),
+        '*':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.mul, (e.value for e in args))))),
+        '/':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.div, (e.value for e in args))))),
+        'not':   fix_args(1, evaluate_args(lambda args, env, pc: Token(not args[0].value, 'BOOLEAN'))),
+        'mod':   fix_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.mod,  (e.value for e in args))))),
+        'eq?':   fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value is args[1].value,  'BOOLEAN'))),
+        '=':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value == args[1].value,  'BOOLEAN'))),
+        '<':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value <  args[1].value,  'BOOLEAN'))),
+        '>':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value >  args[1].value,  'BOOLEAN'))),
+        '<=':    fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value <= args[1].value,  'BOOLEAN'))),
+        '>=':    fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value >= args[1].value,  'BOOLEAN'))),
+        'and':   min_args(2, lambda args, env, pc: Token(all(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN')),
+        'or':    min_args(2, lambda args, env, pc: Token(any(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN')),
+        'if':    fix_args(3, lambda args, env, pc: evaluate_sexpression(args[1], env, pc) if
+                                                   evaluate_sexpression(args[0], env).value else
+                                                   evaluate_sexpression(args[2], env, pc)),
+        'nil?':  fix_args(1, evaluate_args(lambda args, env, pc: Token(car(args) == None,  'BOOLEAN'))),
+        'atom?': fix_args(1, evaluate_args(lambda args, env, pc: Token(is_atom(car(args)), 'BOOLEAN'))),
+        'len':   fix_args(1, evaluate_args(lambda args, env, pc: Token(len(car(args)) if car(args) is not None else 0, 'INTEGER'))),
+        'car':   fix_args(1, evaluate_args(lambda args, env, pc: car(car(args)))),
+        'cdr':   fix_args(1, evaluate_args(lambda args, env, pc: cdr(car(args)))),
+        'cons':  fix_args(2, evaluate_args(lambda args, env, pc: cons(car(args), car(cdr(args))))),
+        'eval':  lambda args, env, pc: evaluate_sexpression(args, env, pc),
+        'list':  evaluate_args(lambda args, env, pc: args),
     })
     return environment
 
