@@ -4,6 +4,7 @@ import operator
 from lexer import Token
 from parser import Element
 import lexer, parser
+from cons import *
 
 __all__ = ["evaluate", "to_str"]
 
@@ -82,50 +83,9 @@ with SCHEME_PARSER as p:
 
 SCHEME_PARSER.grammar = SCHEME_GRAMMAR
 
-class Pair(object):
-    """
-    Implementation of the fundamental scheme data structure
-    """
-
-    def __init__(self, first, second):
-        "Create a pair with values"
-        self.first = first
-        self.second = second
-
-    def __repr__(self):
-        return "(%s . %s)" % (str(self.first), str(self.second))
-
-    def __iter__(self):
-        "iterator over the list structure"
-        cur = self
-        while is_pair(cur):
-            yield cur.first
-            cur = cur.second
-
-    def terminal(self):
-        "return the last non-Pair element of the list"
-        cur = self
-        while is_pair(cur):
-            cur = cur.second
-        return cur
-
-    def __len__(self):
-        return len(list(iter(self)))
-
-    def __getitem__(self, idx):
-        for i, x in enumerate(self):
-            if i == idx:
-                return x
-        raise IndexError("Index out of range")
-
 # predicates
 is_atom = lambda x: x is None or type(x) == Token
 is_symbol = lambda x: x is not None and is_atom(x) and x.type == 'SYMBOL'
-is_pair  = lambda x: type(x) == Pair
-
-cons = lambda a,b: Pair(a,b)
-car = lambda x: x.first
-cdr = lambda x: x.second
 
 class SymbolData(object):
     """
