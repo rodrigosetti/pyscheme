@@ -1,13 +1,11 @@
 # coding: utf-8
 
-import operator
-from lexer import Token
-from parser import Element
-import lexer, parser
 from cons import *
-from procedure import Procedure
-from macro import Macro
 from environment import Environment, make_default_environment
+from macro import Macro
+from parser import Element, Parser
+from procedure import Procedure
+import lexer
 
 __all__ = ["evaluate"]
 
@@ -60,7 +58,7 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
 SCHEME_TOKENIZER = lexer.Tokenizer(SCHEME_LEX_RULES, start=START)
 
 #: The scheme parser
-SCHEME_PARSER = parser.Parser(start=EXPRESSION)
+SCHEME_PARSER = Parser(start=EXPRESSION)
 
 with SCHEME_PARSER as p:
     #: The scheme grammar for the parser
@@ -114,15 +112,22 @@ def tree_to_scheme(tree):
 
 def string_to_scheme(string):
     "Transforms a string input into a pair lisp's structure"
-    global SCHEME_PARSER, SCHEME_TOKENIZER
-
     return tree_to_scheme(SCHEME_PARSER.parse(SCHEME_TOKENIZER.tokens(string)))
 
 def evaluate(string, environment=None):
-        evaluator = Evaluator(make_default_environment() if environment is None else environment)
-        return evaluator.evaluate_str(string)
+    """
+    evaluate a string in the scheme evaluator, and return the result as a scheme
+    object.
+    """
+    evaluator = Evaluator(make_default_environment() if environment is None else environment)
+    return evaluator.evaluate_str(string)
 
 class Evaluator(object):
+    """
+    The scheme evaluator. It's a register machine implementation of the
+    Explicit-Control Evaluator from the book Structure and Interpretation of
+    Computer Programs. Extended with some stuff.
+    """
 
     def __init__(self, environment):
         # initialize registers
@@ -175,8 +180,7 @@ class Evaluator(object):
                                  self.env)
             return self.continue_
         elif car(self.exp) == 'set!':
-            self.unev = cadr(self.exp) # the assignment variable
-            self.stack.append(self.unev)
+            self.stack.append(cadr(self.exp))  # the assignment variable
             self.exp = caddr(self.exp) # the assignment body
             self.stack.append(self.env)
             self.stack.append(self.continue_)
@@ -200,7 +204,6 @@ class Evaluator(object):
             else:
                 self.stack.append(self.unev)
                 self.exp = caddr(self.exp) # the definition body
-
                 self.stack.append(self.env)
                 self.stack.append(self.continue_)
                 self.continue_ = self._ev_definition_1
@@ -212,15 +215,10 @@ class Evaluator(object):
             self.continue_ = self._ev_if_decide
             self.exp = cadr(self.exp) # the if predicate
             return self._eval_dispatch
-        elif car(self.exp) == 'begin':
-            self.unev = cdr(self.exp) # the begin actions
-            self.stack.append(self.continue_)
-            return self._ev_sequence
         else: # assume it's a procedure or macro application
             self.stack.append(self.continue_)
             self.stack.append(self.env)
-            self.unev = cdr(self.exp) # the operands of the application
-            self.stack.append(self.unev)
+            self.stack.append(cdr(self.exp)) # the operands of the application
             self.exp = car(self.exp) # the operator of the application
             self.continue_ = self._ev_appl_did_operator
             return self._eval_dispatch
@@ -264,8 +262,7 @@ class Evaluator(object):
 
     def _ev_sequence_continue(self):
         self.env = self.stack.pop()
-        self.unev = self.stack.pop()
-        self.unev = cdr(self.unev) # get the rest of expressions list
+        self.unev = cdr(self.stack.pop()) # get the rest of expressions list
         return self._ev_sequence
 
     def _ev_appl_did_operator(self):

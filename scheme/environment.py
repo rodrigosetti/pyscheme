@@ -10,15 +10,21 @@ from procedure import BuiltinProcedure
 
 class Environment(dict):
     """
-    Hierarchical dictionary
+    Hierarchical dictionary. This object serves as a frame in the scheme
+    evaluation model, which can point to a higher scope environment.
     """
 
     def __init__(self, parent=None):
+        """
+        Creates a new environment frame , optionaly, pointing to a parent
+        frame.
+        """
+        super(Environment, self).__init__()
         self.parent = parent
 
     def __getitem__(self, name):
         """
-        Get expression evaluated from the hierarchy
+        Get the value from the name in this frame or higher scope ones.
         """
         try:
             return super(Environment, self).__getitem__(name)
@@ -26,13 +32,13 @@ class Environment(dict):
             if self.parent is not None:
                 return self.parent[name]
             else:
-                raise e
+                raise KeyError("Unbound variable %s" % name)
 
     def change(self, name, value):
         if name in self:
             self[name] = value
         elif self.parent is None:
-            raise KeyError("%s not found in environment" % name)
+            raise KeyError("Unbound variable %s" % name)
         else:
             self.parent.change(name, value)
 
@@ -91,6 +97,7 @@ def make_default_environment():
             'len':   BuiltinProcedure(lambda args: 0 if is_nil(car(args)) else len(car(args)), 'len', 1, 1),
             '!=':    BuiltinProcedure(lambda args: car(args) != cadr(args), '!=', 2, 2),
             'not':   Macro(((s('(_ e)'), s('(if e #f #t)')),)),
+            'begin': Macro(((s('(_ e ...)'), s('((lambda () e ...))')),)),
             'list':  Macro(((s('(_)'), s('()')),
                             (s('(_ e ...)'), s('(cons e (list ...))')),)),
             'and':   Macro(((s('(_)'), s('#t')),

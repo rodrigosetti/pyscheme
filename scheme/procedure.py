@@ -5,6 +5,11 @@ from cons import *
 __all__ = ['Procedure', 'BuiltinProcedure']
 
 class Procedure(object):
+    """
+    Represents a procedure (created from lambda expression) with the formal
+    parameters, the expression body, and the environment in which it was
+    created
+    """
 
     def __init__(self, parameters, body, environment):
         self.parameters = []
@@ -31,8 +36,16 @@ class Procedure(object):
             return "<compound procedure with arity %d>" % len(self.parameters)
 
 class BuiltinProcedure(object):
+    """
+    Represents a callable built-in procedure, created with a callable objects,
+    its name, and some restrictions on the number of arguments.
+    """
 
     def __init__(self, callable_, name, min_args=None, max_args=None):
+        """
+        Creates a new built-in procedure from a callable object, with a name,
+        and optional restrictions on the number of arguments.
+        """
         self.callable_ = callable_
         self.name = name
         self.min_args = min_args
