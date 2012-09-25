@@ -14,7 +14,12 @@ class cons(object):
         elements = []
         current = self
         while is_pair(current):
-            elements.append(str(car(current)))
+            val = car(current)
+            if type(val) == unicode:
+                val = val.encode('utf-8')
+            else:
+                val = str(val)
+            elements.append(val)
             current = cdr(current)
 
         return "(%s%s)" % (' '.join(elements),
@@ -54,7 +59,7 @@ cadddr = lambda x: car(cdr(cdr(cdr(x))))
 
 #: atom is everything which is not nil and not pair
 is_atom  = lambda x: not is_nil(x) and not is_pair(x)
-is_symbol  = lambda x: type(x) == str
+is_symbol  = lambda x: type(x) in (str, unicode)
 is_pair  = lambda x: type(x) == cons
 is_nil  = lambda x: x is None
 
