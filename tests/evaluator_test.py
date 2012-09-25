@@ -161,12 +161,16 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(2, result)
 
         # variable arguments
-        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) a))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5))")
         self.assertEquals(5, result)
 
         # variable arguments as optional
-        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) a))) (n-of-args 1))")
+        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) 1))) (n-of-args 1))")
         self.assertEquals(1, result)
+
+        # zero or more arguments
+        result = evaluator.evaluate("(begin (define n-of-args (λ (() . b) (len b))) (n-of-args 1 2 3 4 5))")
+        self.assertEquals(5, result)
 
         # nested environments in lambdas
         result = evaluator.evaluate("(begin (define x 100) (define inc (λ (x) (+ 1 x))) (+ (inc 7) x))")

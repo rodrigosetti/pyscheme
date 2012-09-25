@@ -1,19 +1,20 @@
 #! /usr/bin/env python
 # coding: utf-8
 
-from evaluator import Evaluator
-from environment import make_global_environment
+from evaluator import evaluate, string_to_scheme
+from environment import make_default_environment
 
 if __name__ == "__main__":
 
-    evaluator = Evaluator(make_global_environment())
+    environment = make_default_environment()
     while True:
 
         try:
-            print evaluator.evaluate_str(raw_input("> "))
+            result = evaluate(unicode(raw_input("> "), 'utf-8'), environment)
+            print "=>", result
         except EOFError:
             print "\nexiting..."
             break
         except Exception as e:
-            print e.message
+            print "error:", e.message
 

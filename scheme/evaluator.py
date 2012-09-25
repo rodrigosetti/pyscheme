@@ -6,7 +6,7 @@ from parser import Element
 import lexer, parser
 from cons import *
 from procedure import Procedure
-from environment import Environment, make_global_environment
+from environment import Environment, make_default_environment
 
 __all__ = ["evaluate", "to_str"]
 
@@ -124,7 +124,7 @@ def string_to_scheme(string):
     return tree_to_scheme(SCHEME_PARSER.parse(SCHEME_TOKENIZER.tokens(string)))
 
 def evaluate(string, environment=None):
-        evaluator = Evaluator(make_global_environment() if environment is None else environment)
+        evaluator = Evaluator(make_default_environment() if environment is None else environment)
         return evaluator.evaluate_str(string)
 
 class Evaluator(object):
@@ -174,7 +174,7 @@ class Evaluator(object):
         elif car(self.exp) == 'quote':
             self.val = cadr(self.exp) # the quoted text
             return self.continue_
-        elif car(self.exp) in ('lambda', 'λ'):
+        elif car(self.exp) in ('lambda', u'λ'):
             self.unev = cadr(self.exp) # the lambda parameters
             self.exp = cddr(self.exp) # the lambda body (not atom, for implicit sequence)
             self.val = Procedure(self.unev, self.exp, self.env)
@@ -302,10 +302,21 @@ class Evaluator(object):
         elif type(self.proc) == Procedure: # compound procedure
             # extends environment:
             self.env = Environment(parent=self.proc.environment)
-            for name in self.proc.parameters:
-                self.env[name] = self.argl.pop(0)
+
+            # if the lambda parameters is not in the format ( () [. <symbol>] )
+            # for taking zero or more arguments
+            if len(self.proc.parameters) != 1 or not is_nil(self.proc.parameters[0]):
+                for name in self.proc.parameters:
+                    try:
+                        self.env[name] = self.argl.pop(0)
+                    except IndexError:
+                        raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
+                                         (self.proc, len(self.proc.parameters)))
             if not is_nil(self.proc.optional):
                 self.env[self.proc.optional] = make_list(self.argl)
+            elif self.argl:
+                raise ValueError("Too much parameters for procedure %s. It should be %d." %
+                                 (self.proc, len(self.proc.parameters)))
 
             self.unev = self.proc.body
             return self._ev_sequence

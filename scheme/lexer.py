@@ -66,7 +66,11 @@ class Token(object):
         return bool(self.value)
 
     def __repr__(self):
-        return '<Token %s "%s">' % (self.type, self.value)
+        if type(self.value) == unicode:
+            val = self.value.encode('utf-8')
+        else:
+            val = self.value
+        return '<Token %s "%s">' % (self.type, val)
 
 class Tokenizer(object):
     """
