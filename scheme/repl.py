@@ -3,6 +3,7 @@
 
 from evaluator import evaluate, string_to_scheme
 from environment import make_default_environment
+from cons import pretty_print
 
 if __name__ == "__main__":
 
@@ -11,7 +12,7 @@ if __name__ == "__main__":
 
         try:
             result = evaluate(unicode(raw_input("> "), 'utf-8'), environment)
-            print "=>", result
+            print "=>", pretty_print(result)
         except EOFError:
             print "\nexiting..."
             break

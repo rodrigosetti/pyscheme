@@ -2,6 +2,8 @@
 
 from cons import *
 
+__all__ = ['Procedure', 'BuiltinProcedure']
+
 class Procedure(object):
 
     def __init__(self, parameters, body, environment):

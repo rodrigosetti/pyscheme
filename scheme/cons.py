@@ -17,9 +17,8 @@ class cons(object):
             val = car(current)
             if type(val) == unicode:
                 val = val.encode('utf-8')
-            else:
-                val = str(val)
-            elements.append(val)
+
+            elements.append(pretty_print(val))
             current = cdr(current)
 
         return "(%s%s)" % (' '.join(elements),
@@ -50,22 +49,33 @@ def cdr(pair):
         raise ValueError("Not a cons")
     return pair.second
 
-caar = lambda x: car(car(x))
-cddr = lambda x: cdr(cdr(x))
-cdar = lambda x: cdr(car(x))
-cadr = lambda x: car(cdr(x))
-caddr = lambda x: car(cdr(cdr(x)))
+caar   = lambda x: car(car(x))
+cddr   = lambda x: cdr(cdr(x))
+cdar   = lambda x: cdr(car(x))
+cadr   = lambda x: car(cdr(x))
+caddr  = lambda x: car(cdr(cdr(x)))
 cadddr = lambda x: car(cdr(cdr(cdr(x))))
 
 #: atom is everything which is not nil and not pair
-is_atom  = lambda x: not is_nil(x) and not is_pair(x)
-is_symbol  = lambda x: type(x) in (str, unicode)
-is_pair  = lambda x: type(x) == cons
-is_nil  = lambda x: x is None
+is_atom   = lambda x: not is_nil(x) and not is_pair(x)
+is_symbol = lambda x: type(x) in (str, unicode)
+is_pair   = lambda x: type(x) == cons
+is_nil    = lambda x: x is None
 
 def make_list(iterable):
     result = None
     for e in reversed(iterable):
         result = cons(e, result)
     return result
+
+def pretty_print(exp):
+
+    if exp is None:
+        return '()'
+    elif exp is True:
+        return '#t'
+    elif exp is False:
+        return '#f'
+    else:
+        return str(exp)
 

@@ -6,9 +6,10 @@ from parser import Element
 import lexer, parser
 from cons import *
 from procedure import Procedure
+from macro import Macro
 from environment import Environment, make_default_environment
 
-__all__ = ["evaluate", "to_str"]
+__all__ = ["evaluate"]
 
 #: Lex states constants enum
 (START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, INTEGER_OR_SYMBOL,
@@ -84,12 +85,6 @@ with SCHEME_PARSER as p:
                                            p.token('FLOAT')}
 
 SCHEME_PARSER.grammar = SCHEME_GRAMMAR
-
-def create_list(expressions):
-    if len(expressions) == 0:
-        return None
-    else:
-        return cons(expressions[0], create_list(expressions[1:]))
 
 def tree_to_scheme(tree):
     "Transforms a parsed tree to scheme"
@@ -174,10 +169,10 @@ class Evaluator(object):
         elif car(self.exp) == 'quote':
             self.val = cadr(self.exp) # the quoted text
             return self.continue_
-        elif car(self.exp) in ('lambda', u'λ'):
-            self.unev = cadr(self.exp) # the lambda parameters
-            self.exp = cddr(self.exp) # the lambda body (not atom, for implicit sequence)
-            self.val = Procedure(self.unev, self.exp, self.env)
+        elif car(self.exp) == 'lambda':
+            self.val = Procedure(cadr(self.exp), # the lambda parameters
+                                 cddr(self.exp), # the lambda body
+                                 self.env)
             return self.continue_
         elif car(self.exp) == 'set!':
             self.unev = cadr(self.exp) # the assignment variable
@@ -187,14 +182,29 @@ class Evaluator(object):
             self.stack.append(self.continue_)
             self.continue_ = self._ev_assignment_1
             return self._eval_dispatch
+        elif car(self.exp) == 'macro':
+            self.val = Macro( [(car(e), cadr(e)) for e in cddr(self.exp)],
+                              [] if not cadr(self.exp) else set(iter(cadr(self.exp))) )
+            return self.continue_
         elif car(self.exp) == 'define':
             self.unev = cadr(self.exp) # the definition variable
-            self.stack.append(self.unev)
-            self.exp = caddr(self.exp) # the definition body
-            self.stack.append(self.env)
-            self.stack.append(self.continue_)
-            self.continue_ = self._ev_definition_1
-            return self._eval_dispatch
+
+            # check the case where the the define is using the lambda syntatic
+            # sugar: (define (<symbol> <param> ...) <body>)
+            if is_pair(self.unev):
+                self.env[car(self.unev)] = Procedure(cdr(self.unev), # parameters
+                                                     cddr(self.exp), # body
+                                                     self.env)
+                self.val = car(self.unev)
+                return self.continue_
+            else:
+                self.stack.append(self.unev)
+                self.exp = caddr(self.exp) # the definition body
+
+                self.stack.append(self.env)
+                self.stack.append(self.continue_)
+                self.continue_ = self._ev_definition_1
+                return self._eval_dispatch
         elif car(self.exp) == 'if':
             self.stack.append(self.exp)
             self.stack.append(self.env)
@@ -206,7 +216,7 @@ class Evaluator(object):
             self.unev = cdr(self.exp) # the begin actions
             self.stack.append(self.continue_)
             return self._ev_sequence
-        else: # assume it's an application
+        else: # assume it's a procedure or macro application
             self.stack.append(self.continue_)
             self.stack.append(self.env)
             self.unev = cdr(self.exp) # the operands of the application
@@ -261,12 +271,21 @@ class Evaluator(object):
     def _ev_appl_did_operator(self):
         self.unev = self.stack.pop() # the operands
         self.env = self.stack.pop()
-        self.argl = [] # the empty argument list
         self.proc = self.val # the operator
-        if is_nil(self.unev): # if there's no operands
-            return self._apply_dispatch
-        self.stack.append(self.proc)
-        return self._ev_appl_operand_loop
+
+        # if it's a macro
+        if type(self.proc) == Macro:
+            self.unev = cons('_', self.unev)
+            self.exp = self.proc.transform(self.unev)
+            self.continue_ = self.stack.pop()
+            return self._eval_dispatch
+        else:
+            # not a macro... must evaluate operands
+            self.argl = [] # the empty argument list
+            if is_nil(self.unev): # if there's no operands
+                return self._apply_dispatch
+            self.stack.append(self.proc)
+            return self._ev_appl_operand_loop
 
     def _ev_appl_operand_loop(self):
         self.stack.append(self.argl)
