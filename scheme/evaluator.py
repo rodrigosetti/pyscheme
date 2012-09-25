@@ -5,6 +5,8 @@ from lexer import Token
 from parser import Element
 import lexer, parser
 from cons import *
+from procedure import Procedure
+from environment import Environment, make_global_environment
 
 __all__ = ["evaluate", "to_str"]
 
@@ -83,62 +85,6 @@ with SCHEME_PARSER as p:
 
 SCHEME_PARSER.grammar = SCHEME_GRAMMAR
 
-# predicates
-is_atom = lambda x: x is None or type(x) == Token
-is_symbol = lambda x: x is not None and is_atom(x) and x.type == 'SYMBOL'
-
-class SymbolData(object):
-    """
-    Represent a piece of information associated to a symbol in the environment
-    """
-    def __init__(self, expression, environment, is_evaluated=False):
-        self.expression = expression
-        self.environment = environment
-        self.is_evaluated = is_evaluated
-
-    def evaluate(self):
-        self.expression = evaluate_sexpression(self.expression, self.environment)
-        self.is_evaluated = True
-        return self
-
-class Environment(dict):
-    """
-    Hierarchical dictionary
-    """
-
-    def __init__(self, parent=None):
-        self.parent = parent
-
-    def add(self, name, expression, environment=None, is_evaluated=False):
-        """
-        Adds an expression and the environment it's supposed to be
-        evaluated
-        """
-        if name in self:
-            raise RuntimeError("Symbol %s already defined in environment" % name)
-        super(Environment, self).__setitem__(name, SymbolData(expression, environment, is_evaluated))
-
-    def __setitem__(self, *args):
-        raise ValueError("Please use .add method to add stuff to environment")
-
-    def __getitem__(self, name):
-        """
-        Get expression evaluated from the hierarchy
-        """
-        try:
-            symbol_data = super(Environment, self).__getitem__(name)
-            if type(symbol_data) == SymbolData:
-                if not symbol_data.is_evaluated:
-                    super(Environment, self).__setitem__(name, symbol_data.evaluate())
-                return symbol_data.expression
-            else:
-                return symbol_data
-        except KeyError as e:
-            if self.parent is not None:
-                return self.parent[name]
-            else:
-                raise e
-
 def create_list(expressions):
     if len(expressions) == 0:
         return None
@@ -150,9 +96,9 @@ def tree_to_scheme(tree):
 
     if type(tree) == Element:
         if tree.name == ATOM:
-            return tree.value[0].value
+            return tree.value[0].value.value
         elif tree.name == QUOTED_EXPRESSION:
-            return cons(Token('quote', 'SYMBOL'), cons(tree_to_scheme(tree.value[0]), None))
+            return cons('quote', cons(tree_to_scheme(tree.value[0]), None))
         elif tree.name == LIST:
             return tree_to_scheme(tree.value)
         elif tree.name == EXPRESSION:
@@ -177,287 +123,193 @@ def string_to_scheme(string):
 
     return tree_to_scheme(SCHEME_PARSER.parse(SCHEME_TOKENIZER.tokens(string)))
 
-def to_str(expression):
-    "Trasforms a s-expression into a string"
-    if expression is None:
-        return 'nil'
-    elif is_atom(expression):
-        if expression.type == 'BOOLEAN':
-            return '#t' if expression.value else '#f'
-        else:
-            return str(expression.value)
-    elif callable(expression):
-        return "<procedure>"
-    elif is_pair(expression):
-        s = "(" + ' '.join([to_str(e) for e in expression])
-        t = expression.terminal()
-        if t is not None:
-            s += " . %s" % to_str(t)
-        return s + ")"
-    else:
-        raise ValueError("Invalid expression: %s" % expression)
-
 def evaluate(string, environment=None):
-    """
-    Evaluate program string, returning a s-expression result
-    """
-    if environment is None:
-        environment = make_global_environment()
+        evaluator = Evaluator(make_global_environment() if environment is None else environment)
+        return evaluator.evaluate_str(string)
 
-    return evaluate_sexpression(string_to_scheme(string), environment)
+class Evaluator(object):
 
-class TailCall(Exception):
+    def __init__(self, environment):
+        # initialize registers
+        self.exp = None
+        self.env = environment
+        self.val = None
+        self.continue_ = None
+        self.proc = None
+        self.argl = None
+        self.unev = None
 
-    def __init__(self, arguments, caller_environment):
-        super(TailCall, self).__init__()
-        self.arguments = arguments
-        self.caller_environment = caller_environment
+        # initialize stack
+        self.stack = []
 
-class Procedure(object):
+    def evaluate_str(self, expression_str):
+        """
+        Evaluate program string, returning a s-expression result
+        """
+        return self.evaluate(string_to_scheme(expression_str))
 
-    def __init__(self, params_names, variable_param, expression, environment):
-        self.params_names = params_names
-        self.variable_param = variable_param
-        self.expression = expression
-        self.environment = environment
+    def evaluate(self, expression):
+        """
+        Evaluate program s-expression, returning a s-expression result
+        """
+        # feed expression
+        self.exp = expression
 
-    def __call__(self, arguments, caller_environment, procedure_context=None):
+        # start with eval-dispatch
+        continuation = self._eval_dispatch()
 
-        while True:
-            # create a sub-environment
-            procedure_env = Environment(self.environment)
+        # the continuation loop
+        while continuation:
+            continuation = continuation()
 
-            cur_arg = arguments
-            for name in self.params_names:
-                if not is_pair(cur_arg):
-                    raise RuntimeError("Too few arguments for procedure. should be at least %d" %
-                                        len(self.params_names))
+        return self.val
 
-                # name unevaluated expression argument in procedure environment
-                procedure_env.add(name, cur_arg.first, caller_environment)
+    def _eval_dispatch(self):
+        if is_symbol(self.exp): # is variable?
+            self.val = self.env[self.exp]
+            return self.continue_
+        if is_atom(self.exp) or is_nil(self.exp):  # self evaluating?
+            self.val = self.exp
+            return self.continue_
+        elif car(self.exp) == 'quote':
+            self.val = cadr(self.exp) # the quoted text
+            return self.continue_
+        elif car(self.exp) in ('lambda', 'λ'):
+            self.unev = cadr(self.exp) # the lambda parameters
+            self.exp = cddr(self.exp) # the lambda body (not atom, for implicit sequence)
+            self.val = Procedure(self.unev, self.exp, self.env)
+            return self.continue_
+        elif car(self.exp) == 'set!':
+            self.unev = cadr(self.exp) # the assignment variable
+            self.stack.append(self.unev)
+            self.exp = caddr(self.exp) # the assignment body
+            self.stack.append(self.env)
+            self.stack.append(self.continue_)
+            self.continue_ = self._ev_assignment_1
+            return self._eval_dispatch
+        elif car(self.exp) == 'define':
+            self.unev = cadr(self.exp) # the definition variable
+            self.stack.append(self.unev)
+            self.exp = caddr(self.exp) # the definition body
+            self.stack.append(self.env)
+            self.stack.append(self.continue_)
+            self.continue_ = self._ev_definition_1
+            return self._eval_dispatch
+        elif car(self.exp) == 'if':
+            self.stack.append(self.exp)
+            self.stack.append(self.env)
+            self.stack.append(self.continue_)
+            self.continue_ = self._ev_if_decide
+            self.exp = cadr(self.exp) # the if predicate
+            return self._eval_dispatch
+        elif car(self.exp) == 'begin':
+            self.unev = cdr(self.exp) # the begin actions
+            self.stack.append(self.continue_)
+            return self._ev_sequence
+        else: # assume it's an application
+            self.stack.append(self.continue_)
+            self.stack.append(self.env)
+            self.unev = cdr(self.exp) # the operands of the application
+            self.stack.append(self.unev)
+            self.exp = car(self.exp) # the operator of the application
+            self.continue_ = self._ev_appl_did_operator
+            return self._eval_dispatch
 
-                cur_arg = cur_arg.second
+    def _ev_assignment_1(self):
+        self.continue_ = self.stack.pop()
+        self.env = self.stack.pop()
+        self.unev = self.stack.pop()
+        self.env.change(self.unev, self.val)
+        self.val = self.val
+        return self.continue_
 
-            # if there is a variable param name, name it to the rest of arguments
-            if self.variable_param:
-                variable = cons(lambda args,env,pc: args, cur_arg)
-                procedure_env.add(self.variable_param, variable, caller_environment)
-            elif cur_arg is not None:
-                # there's no variable params and there still arguments (too much arguments)
-                raise RuntimeError("Too much arguments for procedure. should be %d" %
-                                   len(self.params_names))
+    def _ev_definition_1(self):
+        self.continue_ = self.stack.pop()
+        self.env = self.stack.pop()
+        self.unev = self.stack.pop()
+        self.env[self.unev] = self.val
+        self.val = self.unev
+        return self.continue_
 
-            # evaluate procedure expression with the local environment populated
-            # with parameters
-            try:
-                return evaluate_sexpression(self.expression, procedure_env, procedure_context=self)
-            except TailCall as t:
-                arguments = t.arguments
-                caller_environment = t.caller_environment
-                continue
-
-            break
-
-def evaluate_sexpression(expression, environment, procedure_context=None):
-
-    if is_pair(expression):
-
-        # evaluate head
-        head = expression.first
-        if not is_atom(head) or head.value not in RESERVED_WORDS:
-            head = evaluate_sexpression(head, environment)
-
-        if is_atom(head):
-            if is_symbol(head):
-                if head.value == 'quote':
-                    # return the quoted expression unevaluated
-                    quoted = expression.second
-                    if not is_pair(quoted) or len(quoted) != 1:
-                        SyntaxError("quote form should have one part %s" %
-                                    head.location_str())
-
-                    return quoted.first
-                elif head.value == 'define':
-                    # this is mostly to be used in REPL
-                    # (define <symbol> <expression>)
-                    if len(expression) != 3:
-                        raise SyntaxError("Define form should have two parts %s" %
-                                          head.location_str())
-                    if not is_symbol(expression[1]):
-                        raise SyntaxError("The first part of define form should be a symbol %s" %
-                                          head.location_str())
-
-                    environment.add(expression[1].value, expression[2], environment)
-                    return expression[1]
-                elif head.value == 'let':
-                    # evaluate let expression:
-                    # (let ( (<symbol> <expression>)* ) <expression>)
-                    if len(expression) != 3:
-                        raise SyntaxError("Let form should have three parts %s" %
-                                          head.location_str())
-
-                    # create an empty sub-environment, child of the current environment
-                    sub_environment = Environment(environment)
-
-                    for n, definition in enumerate(expression[1], 1):
-                        if not is_pair(definition):
-                            raise SyntaxError("The definition number %d of let form is not a list %s" %
-                                              (n, head.location_str()))
-                        if len(definition) != 2:
-                            raise SyntaxError("The definition number %d of let form should have two parts %s" %
-                                              (n, head.location_str()))
-                        if not is_symbol(definition[0]):
-                            raise SyntaxError("The first part of definition number %d of let form should be a symbol %s" %
-                                              (n, head.location_str()))
-
-                        # name evaluated expression in current sub-environment
-                        sub_environment.add(definition[0].value, definition[1], sub_environment)
-
-                    # finally, evaluate the let expression with the populated sub-environment
-                    return evaluate_sexpression(expression[2], sub_environment, procedure_context)
-
-                elif head.value == 'lambda' or head.value == 'λ':
-                    # evalualte lambda expression
-                    # (lambda ( <symbol>* ) <expression>)
-                    if len(expression) != 3:
-                        raise SyntaxError("Lambda form should have two parts %s" %
-                                          head.location_str())
-
-                    params = expression[1]
-                    lambda_expr = expression[2]
-
-                    if (not is_pair(params) or not all(is_symbol(e) for e in params)) and params is not None:
-                        raise SyntaxError("Lambda parameters should be a list of symbols %s" %
-                                          head.location_str())
-
-                    if params is not None:
-                        params_names = [e.value for e in params]
-                        last = params.terminal()
-                    else:
-                        params_names = []
-                        last = None
-
-                    if last is not None and not is_symbol(last):
-                        raise SyntaxError("Variable parameter of lambda should be symbol %s" %
-                                          head.location_str())
-
-                    variable_param = last.value if last is not None else None
-
-                    # return a procedure with formal parameters name, an
-                    # optional variable formal parameter; the expression and
-                    # the current environment in which lambda was evaluated
-                    return Procedure(params_names, variable_param, lambda_expr, environment)
-
-                else:
-                    raise RuntimeError('Symbolic value "%s" is not a procedure, line %d, column %d' %
-                                       (to_str(head), head.line, head.column))
-            else:
-                # head of s-expression is not a symbol (i.e. a number, etc.)
-                raise SyntaxError('Non-symbolic value "%s" is not a procedure %s' %
-                                  (to_str(head), head.location_str()))
-        elif callable(head):
-            # it's a procedure (evaluated from lambda) or a built-in
-
-            arguments = expression.second
-
-            # call procedure with evaluated arguments
-            if head == procedure_context:
-                # tail call
-                raise TailCall(arguments, environment)
-
-            return head(arguments, environment, procedure_context)
+    def _ev_if_decide(self):
+        self.continue_ = self.stack.pop()
+        self.env = self.stack.pop()
+        self.exp = self.stack.pop()
+        if self.val: # if evaluated predicate is true
+            self.exp = caddr(self.exp) # evaluates the if consequent
         else:
-            # head of s-expression is not an atom
-            raise RuntimeError('Non-atom "%s" is not a procedure.' % to_str(head))
+            self.exp = cadddr(self.exp) # evaluates the if alternative
+        return self._eval_dispatch
 
-    elif is_atom(expression):
-        # expression is atom
-
-        if is_symbol(expression):
-
-            try:
-                return environment[expression.value]
-            except KeyError:
-                raise SyntaxError('Unbound symbol "%s" at current environment %s' %
-                                  (expression.value, expression.location_str()))
-
-        # return unevaluated token of numeric or None value
-        return expression
-
-    elif callable(expression):
-        # return the unevaluated procedure
-        return expression
-    else:
-        # expression is not a token, pair, nil or procedure (???)
-        raise ValueError("Invalid expression: %s" % expression)
-
-def evaluate_args(procedure):
-    "evaluate arguments decorator"
-
-    def eval_arg_procedure(arguments, environment, procedure_context):
-        if is_pair(arguments):
-            arguments = create_list([evaluate_sexpression(e, environment) for e in arguments])
+    def _ev_sequence(self):
+        self.exp = car(self.unev) # get the first expression of the list
+        if is_nil(cdr(self.unev)): # if this is the last expression
+            self.continue_ = self.stack.pop()
+            return self._eval_dispatch
         else:
-            arguments = evaluate_sexpression(arguments, environment)
+            self.stack.append(self.unev)
+            self.stack.append(self.env)
+            self.continue_ = self._ev_sequence_continue
+            return self._eval_dispatch
 
-        return procedure(arguments, environment, procedure_context)
+    def _ev_sequence_continue(self):
+        self.env = self.stack.pop()
+        self.unev = self.stack.pop()
+        self.unev = cdr(self.unev) # get the rest of expressions list
+        return self._ev_sequence
 
-    return eval_arg_procedure
+    def _ev_appl_did_operator(self):
+        self.unev = self.stack.pop() # the operands
+        self.env = self.stack.pop()
+        self.argl = [] # the empty argument list
+        self.proc = self.val # the operator
+        if is_nil(self.unev): # if there's no operands
+            return self._apply_dispatch
+        self.stack.append(self.proc)
+        return self._ev_appl_operand_loop
 
-def min_args(n, procedure):
-    "check for a minimum number of arguments"
+    def _ev_appl_operand_loop(self):
+        self.stack.append(self.argl)
+        self.exp = car(self.unev) # the first operand
+        if is_nil(cdr(self.unev)): # if this is the last operand
+            self.continue_ = self._ev_appl_accum_last_arg
+            return self._eval_dispatch
+        else:
+            self.stack.append(self.env)
+            self.stack.append(self.unev)
+            self.continue_ = self._ev_appl_accumulate_arg
+            return self._eval_dispatch
 
-    def decorated(arguments, environment):
-        if len(arguments) < n:
-            raise RuntimeError("procedure should have at least %d arguments" % n)
-        return procedure(arguments, environment)
+    def _ev_appl_accumulate_arg(self):
+        self.unev = self.stack.pop()
+        self.env = self.stack.pop()
+        self.argl = self.stack.pop()
+        self.argl.append(self.val) # accumulate the evaluated operand
+        self.unev = cdr(self.unev) # the rest of operands
+        return self._ev_appl_operand_loop
 
-    return procedure
+    def _ev_appl_accum_last_arg(self):
+        self.argl = self.stack.pop()
+        self.argl.append(self.val) # accumulate the evaluated operand
+        self.proc = self.stack.pop()
+        return self._apply_dispatch
 
-def fix_args(n, procedure):
-    "check for a fixed number of arguments"
+    def _apply_dispatch(self):
+        if callable(self.proc): # primitive application
+            self.val = self.proc(make_list(self.argl))
+            self.continue_ = self.stack.pop()
+            return self.continue_
+        elif type(self.proc) == Procedure: # compound procedure
+            # extends environment:
+            self.env = Environment(parent=self.proc.environment)
+            for name in self.proc.parameters:
+                self.env[name] = self.argl.pop(0)
+            if not is_nil(self.proc.optional):
+                self.env[self.proc.optional] = make_list(self.argl)
 
-    def decorated(arguments, environment):
-        if len(arguments) != n:
-            raise RuntimeError("procedure should have %d arguments" % n)
-        return procedure(arguments, environment)
+            self.unev = self.proc.body
+            return self._ev_sequence
+        else:
+            raise ValueError("Cannot apply procedure %s" % self.proc)
 
-    return procedure
-
-def make_global_environment():
-    """
-    Return the default global environment, with built-in procedures and values
-    """
-    environment = Environment()
-    environment.update({
-        'nil':   None,
-        '#t':    Token(True, 'BOOLEAN'),
-        '#f':    Token(False, 'BOOLEAN'),
-        '+':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.add, (e.value for e in args))))),
-        '-':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.sub, (e.value for e in args))))),
-        '*':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.mul, (e.value for e in args))))),
-        '/':     min_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.div, (e.value for e in args))))),
-        'not':   fix_args(1, evaluate_args(lambda args, env, pc: Token(not args[0].value, 'BOOLEAN'))),
-        'mod':   fix_args(2, evaluate_args(lambda args, env, pc: Token(reduce(operator.mod,  (e.value for e in args))))),
-        'eq?':   fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value is args[1].value,  'BOOLEAN'))),
-        '=':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value == args[1].value,  'BOOLEAN'))),
-        '<':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value <  args[1].value,  'BOOLEAN'))),
-        '>':     fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value >  args[1].value,  'BOOLEAN'))),
-        '<=':    fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value <= args[1].value,  'BOOLEAN'))),
-        '>=':    fix_args(2, evaluate_args(lambda args, env, pc: Token(args[0].value >= args[1].value,  'BOOLEAN'))),
-        'and':   min_args(2, lambda args, env, pc: Token(all(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN')),
-        'or':    min_args(2, lambda args, env, pc: Token(any(bool(evaluate_sexpression(e, env)) for e in args),  'BOOLEAN')),
-        'if':    fix_args(3, lambda args, env, pc: evaluate_sexpression(args[1], env, pc) if
-                                                   evaluate_sexpression(args[0], env).value else
-                                                   evaluate_sexpression(args[2], env, pc)),
-        'nil?':  fix_args(1, evaluate_args(lambda args, env, pc: Token(car(args) == None,  'BOOLEAN'))),
-        'atom?': fix_args(1, evaluate_args(lambda args, env, pc: Token(is_atom(car(args)), 'BOOLEAN'))),
-        'len':   fix_args(1, evaluate_args(lambda args, env, pc: Token(len(car(args)) if car(args) is not None else 0, 'INTEGER'))),
-        'car':   fix_args(1, evaluate_args(lambda args, env, pc: car(car(args)))),
-        'cdr':   fix_args(1, evaluate_args(lambda args, env, pc: cdr(car(args)))),
-        'cons':  fix_args(2, evaluate_args(lambda args, env, pc: cons(car(args), car(cdr(args))))),
-        'eval':  lambda args, env, pc: evaluate_sexpression(args, env, pc),
-        'list':  evaluate_args(lambda args, env, pc: args),
-    })
-    return environment
 
