@@ -129,11 +129,11 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(30, result)
 
         # creating and calling procedures
-        result = evaluator.evaluate("(begin (define inc (λ (x) (+ x 1))) (inc 40))")
+        result = evaluator.evaluate("(begin (define inc (lambda (x) (+ x 1))) (inc 40))")
         self.assertEquals(41, result)
 
         # if form
-        result = evaluator.evaluate("(begin (define inc (λ (x) (+ x 1))) (if (= (inc 40) 41) 3 4))")
+        result = evaluator.evaluate("(begin (define inc (lambda (x) (+ x 1))) (if (= (inc 40) 41) 3 4))")
         self.assertEquals(3, result)
 
         # quoting symbols
@@ -161,19 +161,23 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(2, result)
 
         # variable arguments
-        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(begin (define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5))")
         self.assertEquals(5, result)
 
         # variable arguments as optional
-        result = evaluator.evaluate("(begin (define n-of-args (λ (a . b) (+ (len b) 1))) (n-of-args 1))")
+        result = evaluator.evaluate("(begin (define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1))")
         self.assertEquals(1, result)
 
         # zero or more arguments
-        result = evaluator.evaluate("(begin (define n-of-args (λ (() . b) (len b))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(begin (define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5))")
         self.assertEquals(5, result)
 
+        # nested environments in let (using macro)
+        result = evaluator.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
+        self.assertEquals(28, result)
+
         # nested environments in lambdas
-        result = evaluator.evaluate("(begin (define x 100) (define inc (λ (x) (+ 1 x))) (+ (inc 7) x))")
+        result = evaluator.evaluate("(begin (define x 100) (define inc (lambda (x) (+ 1 x))) (+ (inc 7) x))")
         self.assertEquals(108, result)
 
         # atom?
@@ -187,28 +191,26 @@ class TestEvaluator(unittest.TestCase):
     def test_quicksort(self):
 
         string = """
-            (begin (define filter
-                           (λ (f l)
-                              (if (nil? l)
-                                  nil
-                                  (if (f (car l))
-                                      (cons (car l) (filter f (cdr l)))
-                                      (filter f (cdr l))))))
+            (begin (define (filter f l)
+                           (cond ((nil? l)
+                                  nil)
+                                 ((f (car l))
+                                  (cons (car l) (filter f (cdr l))))
+                                 (else
+                                  (filter f (cdr l)))))
 
-                  (define join
-                          (λ (x y)
-                             (if (nil? x)
-                                 y
-                                 (cons (car x) (join (cdr x) y)))))
+                  (define (join x y)
+                          (if (nil? x)
+                              y
+                              (cons (car x) (join (cdr x) y))))
 
-                  (define sort
-                          (λ (l)
-                             (if (nil? l)
-                                 nil
-                                 (begin (define pivot (car l))
-                                        (join (sort (filter (λ (e) (<= e pivot)) (cdr l)))
-                                              (cons pivot
-                                                    (sort (filter (λ (e) (> e pivot)) (cdr l)))))))))
+                  (define (sort l)
+                          (if (nil? l)
+                              nil
+                              (let ((pivot (car l)))
+                                     (join (sort (filter (lambda (e) (<= e pivot)) (cdr l)))
+                                           (cons pivot
+                                                 (sort (filter (lambda (e) (> e pivot)) (cdr l))))))))
 
                  (sort (list 8 6 0 1 5 2 9 3 4 7)))
         """
@@ -222,12 +224,12 @@ class TestEvaluator(unittest.TestCase):
 
         string = """
             (begin (define inc-to-5000
-                           (λ ()
+                           (lambda ()
                               (define iter
-                                      (λ (x)
-                                         (if (>= x 5000)
-                                              x
-                                              (iter (+ 1 x)))))
+                                      (lambda (x)
+                                              (if (>= x 5000)
+                                                   x
+                                                   (iter (+ 1 x)))))
                               (iter 1)))
                  (inc-to-5000))
         """
