@@ -63,12 +63,18 @@ is_pair   = lambda x: type(x) == cons
 is_nil    = lambda x: x is None
 
 def make_list(iterable):
+    """
+    Build a cons list using the elements from a iterable
+    """
     result = None
     for e in reversed(iterable):
         result = cons(e, result)
     return result
 
 def pretty_print(exp):
+    """
+    Return a scheme like representation string of a python object
+    """
 
     if exp is None:
         return '()'

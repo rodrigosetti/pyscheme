@@ -5,8 +5,20 @@ from cons import *
 __all__ = ['Macro']
 
 class Macro(object):
+    """
+    A macro is an object that hold transformation rules which change an input
+    expression into another. The rules are a list of pattern/form pairs. The
+    expression is transformed into the form associated with the first pattern
+    matched from the rules. In case none of the pattern matches, an error is
+    raised.
+    """
 
     def __init__(self, rules, reserved_words=None):
+        """
+        Creates a new macro using the given rules, and optionaly, a set of
+        reserved words. This words will be used to match with the symbols
+        itself (i.e. not variable placeholders).
+        """
         self.rules = rules
         self.reserved_words = set() if not reserved_words else reserved_words
 
@@ -29,7 +41,12 @@ class Macro(object):
     def __repr__(self):
         return "<%d-rule macro>" % len(self.rules)
 
-def match_pattern(pattern, expression, reserved_words):
+def match_pattern(pattern, expression, reserved_words=set()):
+    """
+    Return a dictionary of matched variables if the pattern matches the
+    expression.  An optional reserverd words set might be used to let these
+    words be matched exactly in the pattern.
+    """
 
     if is_atom(pattern):
         if pattern in reserved_words:
@@ -57,6 +74,10 @@ def match_pattern(pattern, expression, reserved_words):
     return None
 
 def substitute(variables, expression):
+    """
+    Substitute an expression using the symbols in it as variables to be
+    looked-up in the variables dictionary - if they exists.
+    """
 
     if is_atom(expression):
         return variables.get(expression, expression)
