@@ -2,7 +2,7 @@
 
 from cons import *
 
-__all__ = ['Macro']
+__all__ = ['Macro', 'is_macro']
 
 class Macro(object):
     """
@@ -89,4 +89,6 @@ def substitute(variables, expression):
                         substitute(variables, cdr(expression)))
     else:
         return expression
+
+is_macro = lambda x: type(x) == Macro
 

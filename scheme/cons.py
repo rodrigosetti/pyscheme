@@ -56,8 +56,10 @@ cadr   = lambda x: car(cdr(x))
 caddr  = lambda x: car(cdr(cdr(x)))
 cadddr = lambda x: car(cdr(cdr(cdr(x))))
 
-#: atom is everything which is not nil and not pair
-is_atom   = lambda x: not is_nil(x) and not is_pair(x)
+#: atom is a numeral or a symbol
+is_atom   = lambda x: is_symbol(x) or type(x) in (int, float)
+
+#: symbol is a textual representation
 is_symbol = lambda x: type(x) in (str, unicode)
 is_pair   = lambda x: type(x) == cons
 is_nil    = lambda x: x is None

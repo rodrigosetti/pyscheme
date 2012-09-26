@@ -10,15 +10,12 @@ import lexer
 __all__ = ["evaluate"]
 
 #: Lex states constants enum
-(START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, INTEGER_OR_SYMBOL,
-MAYBE_INTEGER, STRING_OPEN, STRING_BODY, STRING_CLOSE, SCAPE_CHAR, MAYBE_FLOAT, SYMBOL,) = xrange(14)
+(START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, MAYBE_INTEGER, STRING_OPEN,
+        STRING_BODY, STRING_CLOSE, SCAPE_CHAR, SYMBOL,) = xrange(12)
 
 #: Grammar non-terminal constants enum
-(EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION,
- LIST, DOTED_EXPRESSION, ATOM,) = xrange(6)
-
-#: reserved words are for special forms. they cannot name anything
-RESERVED_WORDS = ('quote', 'define', 'let', 'lambda', 'λ',)
+(EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION, LIST, DOTED_EXPRESSION,
+        ATOM,) = xrange(6)
 
 #: Rules for the scheme lexical analyzer
 SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
@@ -27,8 +24,6 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
                                         (r"\(", LPAREN),
                                         (r"\)", RPAREN),
                                         (r"\.", MAYBE_DOT),
-                                        (r"-",  INTEGER_OR_SYMBOL),
-                                        (r"\d", MAYBE_INTEGER),
                                         (r'"',  STRING_OPEN),
                                         (r".",  SYMBOL)], discard=True),
                     COMMENT: lexer.State([(r"\n",  START),
@@ -36,13 +31,7 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
                     QUOTE: lexer.State(token='QUOTE'),
                     LPAREN: lexer.State(token='LPAREN'),
                     RPAREN: lexer.State(token='RPAREN'),
-                    MAYBE_DOT: lexer.State([(r"\d", MAYBE_FLOAT),
-                                              (r"[^\(\)\s;]", SYMBOL)], token='DOT'),
-                    INTEGER_OR_SYMBOL: lexer.State([(r"\d", MAYBE_INTEGER),
-                                                      (r"[^\(\)\s;]", SYMBOL)], token='SYMBOL'),
-                    MAYBE_INTEGER: lexer.State([(r"\d", MAYBE_INTEGER),
-                                                  (r"\.", MAYBE_FLOAT),
-                                                  (r"[^\(\)\s;]", SYMBOL)], token='INTEGER'),
+                    MAYBE_DOT: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='DOT'),
                     STRING_OPEN: lexer.State([(r'[^"\\]', STRING_BODY),
                                                  (r'\\', SCAPE_CHAR)], discard=True),
                     STRING_BODY: lexer.State([(r'[^"\\]', STRING_BODY),
@@ -50,8 +39,6 @@ SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
                                                  (r'"', STRING_CLOSE)]),
                     SCAPE_CHAR: lexer.State([(r'.', STRING_BODY)]),
                     STRING_CLOSE: lexer.State(token='SYMBOL', discard=True),
-                    MAYBE_FLOAT: lexer.State([(r"\d", MAYBE_FLOAT),
-                                                (r"[^\(\)\s;]", SYMBOL)], token='FLOAT'),
                     SYMBOL: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='SYMBOL')}
 
 #: The scheme tokenizer
@@ -165,10 +152,19 @@ class Evaluator(object):
         return self.val
 
     def _eval_dispatch(self):
-        if is_symbol(self.exp): # is variable?
-            self.val = self.env[self.exp]
+        if is_atom(self.exp): # is a not-nil and not-pair value?
+
+            # if it's a number, try to evaluate to the numeric value. like the
+            # environment has the numeric
+            try:
+                self.val = int(self.exp)
+            except ValueError:
+                try:
+                    self.val = float(self.exp)
+                except ValueError:
+                    self.val = self.env[self.exp]
             return self.continue_
-        if is_atom(self.exp) or is_nil(self.exp):  # self evaluating?
+        if is_nil(self.exp):  # is nil, evaluate to itself
             self.val = self.exp
             return self.continue_
         elif car(self.exp) == 'quote':
@@ -190,6 +186,11 @@ class Evaluator(object):
             self.val = Macro( [(car(e), cadr(e)) for e in cddr(self.exp)],
                               [] if not cadr(self.exp) else set(iter(cadr(self.exp))) )
             return self.continue_
+        elif car(self.exp) == 'eval':
+            self.exp = cadr(self.exp)
+            self.stack.append(self.continue_)
+            self.continue_ = self._ev_eval_1
+            return self._eval_dispatch
         elif car(self.exp) == 'define':
             self.unev = cadr(self.exp) # the definition variable
 
@@ -223,12 +224,16 @@ class Evaluator(object):
             self.continue_ = self._ev_appl_did_operator
             return self._eval_dispatch
 
+    def _ev_eval_1(self):
+        self.continue_ = self.stack.pop()
+        self.exp = self.val
+        return self._eval_dispatch
+
     def _ev_assignment_1(self):
         self.continue_ = self.stack.pop()
         self.env = self.stack.pop()
         self.unev = self.stack.pop()
         self.env.change(self.unev, self.val)
-        self.val = self.val
         return self.continue_
 
     def _ev_definition_1(self):
