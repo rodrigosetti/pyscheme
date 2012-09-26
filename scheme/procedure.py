@@ -2,7 +2,7 @@
 
 from cons import *
 
-__all__ = ['Procedure', 'BuiltinProcedure']
+__all__ = ['Procedure', 'BuiltinProcedure', 'is_procedure']
 
 class Procedure(object):
     """
@@ -64,4 +64,6 @@ class BuiltinProcedure(object):
 
     def __repr__(self):
         return "<builtin procedure %s>" % self.name
+
+is_procedure = lambda x: type(x) in (Procedure, BuiltinProcedure)
 

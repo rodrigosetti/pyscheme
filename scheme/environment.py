@@ -5,8 +5,8 @@ import operator
 import sys
 
 from cons import *
-from macro import Macro
-from procedure import BuiltinProcedure
+from macro import Macro, is_macro
+from procedure import BuiltinProcedure, is_procedure
 
 class Environment(dict):
     """
@@ -56,11 +56,18 @@ def make_minimum_environment():
             '#f'  : False,
 
             # symbolic tests
-            'atom?': BuiltinProcedure(lambda args: is_atom(car(args)), 'atom?', 1, 1),
-            'pair?': BuiltinProcedure(lambda args: is_pair(car(args)), 'pair?', 1, 1),
-            'nil?' : BuiltinProcedure(lambda args: is_nil(car(args)), 'nil?', 1, 1),
-            'eq?':   BuiltinProcedure(lambda args: car(args) is cadr(args), 'eq?', 2, 2),
-            '=':     BuiltinProcedure(lambda args: car(args) == cadr(args), '=', 2, 2),
+            'procedure?' : BuiltinProcedure(lambda args: is_procedure(car(args)), 'procedure?', 1, 1),
+            'macro?' : BuiltinProcedure(lambda args: is_macro(car(args)), 'macro?', 1, 1),
+            'symbol?': BuiltinProcedure(lambda args: is_symbol(car(args)), 'symbol?', 1, 1),
+            'atom?'  : BuiltinProcedure(lambda args: is_atom(car(args)), 'atom?', 1, 1),
+            'pair?'  : BuiltinProcedure(lambda args: is_pair(car(args)), 'pair?', 1, 1),
+            'nil?'   : BuiltinProcedure(lambda args: is_nil(car(args)), 'nil?', 1, 1),
+            'eq?':     BuiltinProcedure(lambda args: car(args) is cadr(args), 'eq?', 2, 2),
+            '=':       BuiltinProcedure(lambda args: car(args) == cadr(args), '=', 2, 2),
+
+            # symbolic manipulation
+            'explode': BuiltinProcedure(lambda args: make_list(list(car(args))), 'explode', 1, 1),
+            'implode': BuiltinProcedure(lambda args: ''.join(iter(args)), 'implode', 1),
 
             # basic data manipulation
             'car':   BuiltinProcedure(lambda args: caar(args), 'car', 1, 1),
