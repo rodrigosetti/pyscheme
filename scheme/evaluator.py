@@ -65,9 +65,7 @@ with SCHEME_PARSER as p:
                       DOTED_EXPRESSION:    p.token('DOT', discard=True) &
                                            p.expression(EXPRESSION),
 
-                      ATOM:                p.token('SYMBOL')  |
-                                           p.token('INTEGER') |
-                                           p.token('FLOAT')}
+                      ATOM:                p.token('SYMBOL')}
 
 SCHEME_PARSER.grammar = SCHEME_GRAMMAR
 
