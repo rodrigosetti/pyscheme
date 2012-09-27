@@ -57,7 +57,7 @@ caddr  = lambda x: car(cdr(cdr(x)))
 cadddr = lambda x: car(cdr(cdr(cdr(x))))
 
 #: atom is a numeral or a symbol
-is_atom   = lambda x: is_symbol(x) or type(x) in (int, float)
+is_atom   = lambda x: is_symbol(x) or type(x) in (int, float, complex)
 
 #: symbol is a textual representation
 is_symbol = lambda x: type(x) in (str, unicode)
@@ -79,7 +79,7 @@ def pretty_print(exp):
     """
 
     if exp is None:
-        return '()'
+        return 'nil'
     elif exp is True:
         return '#t'
     elif exp is False:
