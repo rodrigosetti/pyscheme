@@ -10,7 +10,7 @@ from environment import make_default_environment
 from cons import pretty_print
 
 #: the built-in scheme forms
-SCHEME_KEYWORDS = ('define', 'lambda', 'macro', 'if', 'quote', 'eval', 'set!',)
+SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval',)
 
 if __name__ == "__main__":
 

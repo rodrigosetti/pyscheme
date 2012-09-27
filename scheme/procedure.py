@@ -35,7 +35,7 @@ class Procedure(object):
         else:
             return "<compound procedure with arity %d>" % len(self.parameters)
 
-class BuiltinProcedure(object):
+class BuiltinProcedure(Procedure):
     """
     Represents a callable built-in procedure, created with a callable objects,
     its name, and some restrictions on the number of arguments.
@@ -46,12 +46,14 @@ class BuiltinProcedure(object):
         Creates a new built-in procedure from a callable object, with a name,
         and optional restrictions on the number of arguments.
         """
+        super(BuiltinProcedure, self).__init__(None, None, None)
+
         self.callable_ = callable_
         self.name = name
         self.min_args = min_args
         self.max_args = max_args
 
-    def __call__(self, args):
+    def __call__(self, env, args):
         len_args = 0 if args is None else len(args)
         if self.min_args is not None and len_args < self.min_args:
             raise ValueError("Built-in procedure %s should receive at least %d arguments. %d given." %
@@ -60,10 +62,10 @@ class BuiltinProcedure(object):
             raise ValueError("Built-in procedure %s should receive at most %d arguments. %d given." %
                              (self.name, self.max_args, len_args))
 
-        return self.callable_(args)
+        return self.callable_(env, args)
 
     def __repr__(self):
         return "<builtin procedure %s>" % self.name
 
-is_procedure = lambda x: type(x) in (Procedure, BuiltinProcedure)
+is_procedure = lambda x: isinstance(x, Procedure)
 

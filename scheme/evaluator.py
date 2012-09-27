@@ -15,61 +15,7 @@ __all__ = ["evaluate"]
 
 #: Grammar non-terminal constants enum
 (EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION, LIST, DOTED_EXPRESSION,
-        ATOM,) = xrange(6)
-
-#: Rules for the scheme lexical analyzer
-SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
-                                        (r";",  COMMENT),
-                                        (r"'",  QUOTE),
-                                        (r"\(", LPAREN),
-                                        (r"\)", RPAREN),
-                                        (r"\.", MAYBE_DOT),
-                                        (r'"',  STRING_OPEN),
-                                        (r".",  SYMBOL)], discard=True),
-                    COMMENT: lexer.State([(r"\n",  START),
-                                            (r".", COMMENT)], discard=True),
-                    QUOTE: lexer.State(token='QUOTE'),
-                    LPAREN: lexer.State(token='LPAREN'),
-                    RPAREN: lexer.State(token='RPAREN'),
-                    MAYBE_DOT: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='DOT'),
-                    STRING_OPEN: lexer.State([(r'[^"\\]', STRING_BODY),
-                                                 (r'\\', SCAPE_CHAR)], discard=True),
-                    STRING_BODY: lexer.State([(r'[^"\\]', STRING_BODY),
-                                                 (r'\\', SCAPE_CHAR),
-                                                 (r'"', STRING_CLOSE)]),
-                    SCAPE_CHAR: lexer.State([(r'.', STRING_BODY)]),
-                    STRING_CLOSE: lexer.State(token='SYMBOL', discard=True),
-                    SYMBOL: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='SYMBOL')}
-
-#: The scheme tokenizer
-SCHEME_TOKENIZER = lexer.Tokenizer(SCHEME_LEX_RULES, start=START)
-
-#: The scheme parser
-SCHEME_PARSER = Parser(start=EXPRESSION)
-
-with SCHEME_PARSER as p:
-    #: The scheme grammar for the parser
-    SCHEME_GRAMMAR = {EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
-                                           p.expression(ATOM) |
-                                           p.expression(LIST),
-
-                      QUOTED_EXPRESSION:   p.token('QUOTE', discard=True) &
-                                           (p.expression(ATOM) |
-                                            p.expression(LIST)),
-
-                      LIST:                p.token('LPAREN', discard=True) &
-                                           p.zeroOrMore(p.expression(EXPRESSION)) &
-                                           ~p.expression(DOTED_EXPRESSION) &
-                                           p.token('RPAREN', discard=True),
-
-                      DOTED_EXPRESSION:    p.token('DOT', discard=True) &
-                                           p.expression(EXPRESSION),
-
-                      ATOM:                p.token('SYMBOL')  |
-                                           p.token('INTEGER') |
-                                           p.token('FLOAT')}
-
-SCHEME_PARSER.grammar = SCHEME_GRAMMAR
+        ATOM, PROGRAM) = xrange(7)
 
 def tree_to_scheme(tree):
     "Transforms a parsed tree to scheme"
@@ -83,6 +29,8 @@ def tree_to_scheme(tree):
             return tree_to_scheme(tree.value)
         elif tree.name == EXPRESSION:
             return tree_to_scheme(tree.value[0])
+        elif tree.name == PROGRAM:
+            return tree_to_scheme(tree.value)
         else:
             raise ValueError("Invalid parsed tree element: %s" % tree)
     elif type(tree) == list:
@@ -97,17 +45,81 @@ def tree_to_scheme(tree):
     else:
         raise ValueError("Invalid parsed tree")
 
-def string_to_scheme(string):
-    "Transforms a string input into a pair lisp's structure"
-    return tree_to_scheme(SCHEME_PARSER.parse(SCHEME_TOKENIZER.tokens(string)))
+def string_to_scheme(string, start_parsing=PROGRAM):
+    """
+    Transforms a string input into a pair lisp's structure.
+    """
+
+    #: Rules for the scheme lexical analyzer
+    SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
+                                            (r";",  COMMENT),
+                                            (r"'",  QUOTE),
+                                            (r"\(", LPAREN),
+                                            (r"\)", RPAREN),
+                                            (r"\.", MAYBE_DOT),
+                                            (r'"',  STRING_OPEN),
+                                            (r".",  SYMBOL)], discard=True),
+                        COMMENT: lexer.State([(r"\n",  START),
+                                                (r".", COMMENT)], discard=True),
+                        QUOTE: lexer.State(token='QUOTE'),
+                        LPAREN: lexer.State(token='LPAREN'),
+                        RPAREN: lexer.State(token='RPAREN'),
+                        MAYBE_DOT: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='DOT'),
+                        STRING_OPEN: lexer.State([(r'[^"\\]', STRING_BODY),
+                                                     (r'\\', SCAPE_CHAR)], discard=True),
+                        STRING_BODY: lexer.State([(r'[^"\\]', STRING_BODY),
+                                                     (r'\\', SCAPE_CHAR),
+                                                     (r'"', STRING_CLOSE)]),
+                        SCAPE_CHAR: lexer.State([(r'.', STRING_BODY)]),
+                        STRING_CLOSE: lexer.State(token='SYMBOL', discard=True),
+                        SYMBOL: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='SYMBOL')}
+
+    #: The scheme tokenizer
+    tokenizer = lexer.Tokenizer(SCHEME_LEX_RULES, start=START)
+
+    #: The scheme parser
+    parser = Parser(start=start_parsing)
+
+    with parser as p:
+        #: The scheme grammar for the parser
+        SCHEME_GRAMMAR = {PROGRAM:             p.oneOrMore(p.expression(EXPRESSION)),
+
+                          EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
+                                               p.expression(ATOM) |
+                                               p.expression(LIST),
+
+                          QUOTED_EXPRESSION:   p.token('QUOTE', discard=True) &
+                                               (p.expression(ATOM) |
+                                                p.expression(LIST)),
+
+                          LIST:                p.token('LPAREN', discard=True) &
+                                               p.zeroOrMore(p.expression(EXPRESSION)) &
+                                               ~p.expression(DOTED_EXPRESSION) &
+                                               p.token('RPAREN', discard=True),
+
+                          DOTED_EXPRESSION:    p.token('DOT', discard=True) &
+                                               p.expression(EXPRESSION),
+
+                          ATOM:                p.token('SYMBOL')  |
+                                               p.token('INTEGER') |
+                                               p.token('FLOAT')}
+
+    parser.grammar = SCHEME_GRAMMAR
+
+    return tree_to_scheme(parser.parse(tokenizer.tokens(string)))
 
 def evaluate(string, environment=None):
     """
-    evaluate a string in the scheme evaluator, and return the result as a scheme
-    object.
+    evaluate a string in the scheme evaluator as a program, and return the
+    result as a scheme object.
     """
     evaluator = Evaluator(make_default_environment() if environment is None else environment)
-    return evaluator.evaluate_str(string)
+
+    expressions = string_to_scheme(string)
+
+    for expression in expressions:
+        result = evaluator.evaluate(expression)
+    return result
 
 class Evaluator(object):
     """
@@ -128,12 +140,6 @@ class Evaluator(object):
 
         # initialize stack
         self.stack = []
-
-    def evaluate_str(self, expression_str):
-        """
-        Evaluate program string, returning a s-expression result
-        """
-        return self.evaluate(string_to_scheme(expression_str))
 
     def evaluate(self, expression):
         """
@@ -162,7 +168,10 @@ class Evaluator(object):
                 try:
                     self.val = float(self.exp)
                 except ValueError:
-                    self.val = self.env[self.exp]
+                    try:
+                        self.val = complex(self.exp)
+                    except ValueError:
+                        self.val = self.env[self.exp]
             return self.continue_
         if is_nil(self.exp):  # is nil, evaluate to itself
             self.val = self.exp
@@ -175,13 +184,6 @@ class Evaluator(object):
                                  cddr(self.exp), # the lambda body
                                  self.env)
             return self.continue_
-        elif car(self.exp) == 'set!':
-            self.stack.append(cadr(self.exp))  # the assignment variable
-            self.exp = caddr(self.exp) # the assignment body
-            self.stack.append(self.env)
-            self.stack.append(self.continue_)
-            self.continue_ = self._ev_assignment_1
-            return self._eval_dispatch
         elif car(self.exp) == 'macro':
             self.val = Macro( [(car(e), cadr(e)) for e in cddr(self.exp)],
                               [] if not cadr(self.exp) else set(iter(cadr(self.exp))) )
@@ -191,24 +193,6 @@ class Evaluator(object):
             self.stack.append(self.continue_)
             self.continue_ = self._ev_eval_1
             return self._eval_dispatch
-        elif car(self.exp) == 'define':
-            self.unev = cadr(self.exp) # the definition variable
-
-            # check the case where the the define is using the lambda syntatic
-            # sugar: (define (<symbol> <param> ...) <body>)
-            if is_pair(self.unev):
-                self.env[car(self.unev)] = Procedure(cdr(self.unev), # parameters
-                                                     cddr(self.exp), # body
-                                                     self.env)
-                self.val = car(self.unev)
-                return self.continue_
-            else:
-                self.stack.append(self.unev)
-                self.exp = caddr(self.exp) # the definition body
-                self.stack.append(self.env)
-                self.stack.append(self.continue_)
-                self.continue_ = self._ev_definition_1
-                return self._eval_dispatch
         elif car(self.exp) == 'if':
             self.stack.append(self.exp)
             self.stack.append(self.env)
@@ -228,21 +212,6 @@ class Evaluator(object):
         self.continue_ = self.stack.pop()
         self.exp = self.val
         return self._eval_dispatch
-
-    def _ev_assignment_1(self):
-        self.continue_ = self.stack.pop()
-        self.env = self.stack.pop()
-        self.unev = self.stack.pop()
-        self.env.change(self.unev, self.val)
-        return self.continue_
-
-    def _ev_definition_1(self):
-        self.continue_ = self.stack.pop()
-        self.env = self.stack.pop()
-        self.unev = self.stack.pop()
-        self.env[self.unev] = self.val
-        self.val = self.unev
-        return self.continue_
 
     def _ev_if_decide(self):
         self.continue_ = self.stack.pop()
@@ -317,7 +286,8 @@ class Evaluator(object):
 
     def _apply_dispatch(self):
         if callable(self.proc): # primitive application
-            self.val = self.proc(make_list(self.argl))
+            # call the primitive with the caller's environment and arguments
+            self.val = self.proc(self.env, make_list(self.argl))
             self.continue_ = self.stack.pop()
             return self.continue_
         elif type(self.proc) == Procedure: # compound procedure

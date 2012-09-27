@@ -114,7 +114,7 @@ class TestMacro(unittest.TestCase):
         string = """
             (begin
                     ; define macro in the environment
-                    (define let (macro ()
+                    (define 'let (macro ()
                                        ((_ ((n v)) e1 ...)
                                         ((lambda (n) e1 ...) v))
                                        ((_ ((n v) ...d) e1 ...e)
