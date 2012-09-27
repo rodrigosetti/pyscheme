@@ -100,9 +100,7 @@ def string_to_scheme(string, start_parsing=PROGRAM):
                           DOTED_EXPRESSION:    p.token('DOT', discard=True) &
                                                p.expression(EXPRESSION),
 
-                          ATOM:                p.token('SYMBOL')  |
-                                               p.token('INTEGER') |
-                                               p.token('FLOAT')}
+                          ATOM:                p.token('SYMBOL')}
 
     parser.grammar = SCHEME_GRAMMAR
 
