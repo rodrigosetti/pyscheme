@@ -17,6 +17,59 @@ __all__ = ["evaluate"]
 (EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION, LIST, DOTED_EXPRESSION,
         ATOM, PROGRAM) = xrange(7)
 
+#: Rules for the scheme lexical analyzer
+SCHEME_LEX_RULES = {START: lexer.State([(r"\s", START),
+                                        (r";",  COMMENT),
+                                        (r"'",  QUOTE),
+                                        (r"\(", LPAREN),
+                                        (r"\)", RPAREN),
+                                        (r"\.", MAYBE_DOT),
+                                        (r'"',  STRING_OPEN),
+                                        (r".",  SYMBOL)], discard=True),
+                    COMMENT: lexer.State([(r"\n",  START),
+                                            (r".", COMMENT)], discard=True),
+                    QUOTE: lexer.State(token='QUOTE'),
+                    LPAREN: lexer.State(token='LPAREN'),
+                    RPAREN: lexer.State(token='RPAREN'),
+                    MAYBE_DOT: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='DOT'),
+                    STRING_OPEN: lexer.State([(r'[^"\\]', STRING_BODY),
+                                                 (r'\\', SCAPE_CHAR)], discard=True),
+                    STRING_BODY: lexer.State([(r'[^"\\]', STRING_BODY),
+                                                 (r'\\', SCAPE_CHAR),
+                                                 (r'"', STRING_CLOSE)]),
+                    SCAPE_CHAR: lexer.State([(r'.', STRING_BODY)]),
+                    STRING_CLOSE: lexer.State(token='SYMBOL', discard=True),
+                    SYMBOL: lexer.State([(r"[^\(\)\s;]", SYMBOL)], token='SYMBOL')}
+
+#: The scheme tokenizer
+SCHEME_TOKENIZER = lexer.Tokenizer(SCHEME_LEX_RULES, start=START)
+
+#: The scheme parser
+SCHEME_PARSER = Parser(start=EXPRESSION)
+
+with SCHEME_PARSER as p:
+    #: The scheme grammar for the parser
+    SCHEME_GRAMMAR = {EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
+                                           p.expression(ATOM) |
+                                           p.expression(LIST),
+
+                      QUOTED_EXPRESSION:   p.token('QUOTE', discard=True) &
+                                           (p.expression(ATOM) |
+                                            p.expression(LIST)),
+
+                      LIST:                p.token('LPAREN', discard=True) &
+                                           p.zeroOrMore(p.expression(EXPRESSION)) &
+                                           ~p.expression(DOTED_EXPRESSION) &
+                                           p.token('RPAREN', discard=True),
+
+                      DOTED_EXPRESSION:    p.token('DOT', discard=True) &
+                                           p.expression(EXPRESSION),
+
+                      ATOM:                p.token('SYMBOL')}
+
+SCHEME_PARSER.grammar = SCHEME_GRAMMAR
+>>>>>>> 5d0bc2cbdea71d46e0e2a40bbb7d14513d3dbdd5
+
 def tree_to_scheme(tree):
     "Transforms a parsed tree to scheme"
 
