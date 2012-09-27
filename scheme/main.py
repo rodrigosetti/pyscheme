@@ -1,18 +1,18 @@
 #! /usr/bin/env python
 # coding: utf-8
 
+import atexit
 import os
 import readline
-import atexit
+import sys
 
-from evaluator import evaluate, string_to_scheme
+from evaluator import evaluate
 from environment import make_default_environment
 from cons import pretty_print
 
-#: the built-in scheme forms
-SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval',)
-
-if __name__ == "__main__":
+def repl():
+    #: the built-in scheme forms
+    SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval',)
 
     # the scheme auto-completer
     def completer(text, state):
@@ -51,4 +51,15 @@ if __name__ == "__main__":
             break
         except Exception as e:
             print "error:", e.message
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        repl()
+    elif len(sys.argv) == 2:
+        with open(sys.argv[1]) as f:
+            evaluate(unicode(f.read(), 'utf-8'))
+    else:
+        sys.stderr.write("Usage: %s [FILE]\nif FILE is not provided, scheme runs in eval-print-loop mode.\n" %
+                         sys.argv[0])
+        sys.exit(1)
 

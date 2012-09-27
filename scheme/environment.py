@@ -112,11 +112,11 @@ def make_minimum_environment():
             'cons':  BuiltinProcedure(lambda env, args: cons(car(args), cadr(args)), 'cons', 2, 2),
 
             # I/O operations
-            'write': BuiltinProcedure(lambda env, args: stdout.write(car(args).encode('utf-8').decode('string_escape')), 'write', 1, 1),
+            'write': BuiltinProcedure(lambda env, args: stdout.write(unicode(car(args)).encode('utf-8').decode('string_escape')), 'write', 1, 1),
             'read' : BuiltinProcedure(lambda env, args: stdin.read(1), 'read', 0, 0),
             'file-open' : BuiltinProcedure(lambda env, args: codecs.open(car(args), cadr(args), 'utf-8'), 'file-open', 2, 2),
             'file-close': BuiltinProcedure(lambda env, args: car(args).close(), 'file-close', 1, 1),
-            'file-write': BuiltinProcedure(lambda env, args: car(args).write(cadr(args).encode('utf-8').decode('string_escape').decode('utf-8')), 'file-write', 2, 2),
+            'file-write': BuiltinProcedure(lambda env, args: car(args).write(unicode(cadr(args)).encode('utf-8').decode('string_escape').decode('utf-8')), 'file-write', 2, 2),
             'file-read' : BuiltinProcedure(lambda env, args: car(args).read(1), 'file-read', 1, 1),
 
             # arithmetic operations
