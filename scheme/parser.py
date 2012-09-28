@@ -25,7 +25,7 @@ class Expression(object):
         return Result(True, [Element(result.tree, self.name)]) if result.matches else Result(False)
 
     def __repr__(self):
-        return self.name
+        return str(self.name)
 
 class Optional(Expression):
 
@@ -88,15 +88,16 @@ class ZeroOrMore(Expression):
         self.expression = expression
 
     def match(self, tokens, mandatory=False):
-        matches = []
-        while True:
-            result = self.expression.match(tokens, False)
-            if result.matches:
-                matches.extend(result.tree)
-            else:
-                break
+        def generator():
+            while True:
+                result = self.expression.match(tokens, False)
+                if result.matches:
+                    for t in result.tree:
+                        yield t
+                else:
+                    break
 
-        return Result(True, matches)
+        return Result(True, generator())
 
     def __repr__(self):
         return '%s*' % self.expression
@@ -107,17 +108,27 @@ class OneOrMore(Expression):
         self.expression = expression
 
     def match(self, tokens, mandatory=False):
-        matches = []
-        is_first = True
-        while True:
-            result = self.expression.match(tokens, is_first and mandatory)
-            is_first = False
-            if result.matches:
-                matches.extend(result.tree)
-            else:
-                break
+        def generator():
+            is_first = True
+            matches_any = False
+            while True:
+                result = self.expression.match(tokens, is_first and mandatory)
+                is_first = False
+                if result.matches:
+                    if not matches_any:
+                        matches_any = True
+                        yield True
+                    for t in result.tree:
+                        yield t
+                else:
+                    break
+            if not matches_any:
+                yield False
 
-        return Result(True, matches) if matches else Result(False)
+        matches_gen = generator()
+        matches_any = next(matches_gen)
+
+        return Result(True, matches_gen) if matches_any else Result(False)
 
     def __repr__(self):
         return '%s+' % self.expression
@@ -153,6 +164,29 @@ class Token(Expression):
     def __repr__(self):
         return self.type
 
+class EndToken(Token):
+    """
+    Matches the end of input
+    """
+
+    def __init__(self):
+        super(EndToken, self).__init__(None, discard=True)
+
+    def match(self, tokens, mandatory=False):
+
+        with tokens.mark() as m_tokens:
+            try:
+                next_token = next(iter(m_tokens))
+                tokens.restore()
+
+                if mandatory:
+                    raise SyntaxError('Unexpected %s, expected end of input. At line %d, column %d' %
+                                      (next_token, next_token.line, next_token.column))
+            except StopIteration:
+                pass
+
+        return Result(True)
+
 class Parser(object):
 
     def __init__(self, start, grammar=None):
@@ -161,6 +195,9 @@ class Parser(object):
 
     def token(self, type, discard=False):
         return Token(type, discard)
+
+    def end(self):
+        return EndToken()
 
     def expression(self, name):
         return Expression(name, parser=self)
@@ -180,11 +217,6 @@ class Parser(object):
 
         result = self.start.match(tokensBuffer, True)
 
-        # raise exception if there's something left in the buffer
-        for token in tokens:
-            raise SyntaxError("Unexpected %s at line %d, column %d. Expecting end of tokens" %
-                              (token.value, token.line, token.column))
-
         if result.matches == True:
             return result.tree[0]
         else:
@@ -201,6 +233,12 @@ class Result(object):
     def __init__(self, matches, tree=None):
         self.matches = matches
         self.tree = tree if tree else []
+
+    def __repr__(self):
+        if self.matches:
+            return "<match %s>" % str(self.tree)
+        else:
+            return "<no-match>"
 
 class Element(object):
 

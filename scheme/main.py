@@ -2,13 +2,14 @@
 # coding: utf-8
 
 import atexit
+import codecs
 import os
 import readline
 import sys
 
-from evaluator import evaluate
-from environment import make_default_environment
 from cons import pretty_print
+from environment import make_default_environment, make_minimum_environment
+from evaluator import evaluate
 
 def repl():
     #: the built-in scheme forms
@@ -38,6 +39,7 @@ def repl():
     atexit.register(readline.write_history_file, histfile)
 
     readline.parse_and_bind("tab: complete")
+    readline.parse_and_bind("set blink-matching-paren on")
     readline.set_completer(completer)
 
     environment = make_default_environment()
@@ -56,8 +58,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         repl()
     elif len(sys.argv) == 2:
-        with open(sys.argv[1]) as f:
-            evaluate(unicode(f.read(), 'utf-8'))
+        with codecs.open(sys.argv[1], 'r', 'utf-8') as f:
+            evaluate(f,make_minimum_environment())
     else:
         sys.stderr.write("Usage: %s [FILE]\nif FILE is not provided, scheme runs in eval-print-loop mode.\n" %
                          sys.argv[0])

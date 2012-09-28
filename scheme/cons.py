@@ -73,12 +73,16 @@ is_nil    = lambda x: x is None
 
 def make_list(iterable):
     """
-    Build a cons list using the elements from a iterable
+    Build a cons list using the elements from a iterable. This uses the normal
+    order of the iterable.
     """
-    result = None
-    for e in reversed(iterable):
-        result = cons(e, result)
-    return result
+    def make_list_it(iterator):
+        try:
+            return cons(next(iterator), make_list_it(iterator))
+        except StopIteration:
+            return None
+
+    return make_list_it(iter(iterable))
 
 def pretty_print(exp):
     """

@@ -1,5 +1,7 @@
 # coding: utf-8
 
+import codecs
+
 from cons import *
 from thunk import Thunk, is_thunk
 from environment import Environment, make_default_environment
@@ -18,23 +20,22 @@ __all__ = ["evaluate"]
 (EXPRESSION, QUOTED_EXPRESSION, UNQUOTED_EXPRESSION, LIST, DOTED_EXPRESSION,
         ATOM, PROGRAM) = xrange(7)
 
+class FileStream(object):
+
+    def __init__(self, file):
+        self.file = file
+
+    def __iter__(self):
+        for chunk in self.file:
+            for char in chunk:
+                yield char
+
 def tree_to_scheme(tree):
     "Transforms a parsed tree to scheme"
 
     if type(tree) == Element:
         if tree.name == ATOM:
-            val = tree.value[0].value.value
-            # try to transform to numeric forms
-            try:
-                return int(val)
-            except ValueError:
-                try:
-                    return float(val)
-                except ValueError:
-                    try:
-                        return complex(val)
-                    except ValueError:
-                        return val
+            return tree.value[0].value.value
         elif tree.name == QUOTED_EXPRESSION:
             return cons('quote', cons(tree_to_scheme(tree.value[0]), None))
         elif tree.name == LIST:
@@ -45,21 +46,26 @@ def tree_to_scheme(tree):
             return tree_to_scheme(tree.value)
         else:
             raise ValueError("Invalid parsed tree element: %s" % tree)
-    elif type(tree) == list:
-        if len(tree) == 0:
+    elif hasattr(tree, 'next'): # is an iterator
+        try:
+            e = next(tree)
+            if type(e) == Element and e.name == DOTED_EXPRESSION:
+                return tree_to_scheme(e.value[0])
+            else:
+                return cons(tree_to_scheme(e),
+                            tree_to_scheme(tree))
+        except StopIteration:
             return None
-        elif len(tree) == 1 and type(tree[0]) == Element and tree[0].name == DOTED_EXPRESSION:
-            return tree_to_scheme(tree[0].value[0])
-        else:
-            return cons(tree_to_scheme(tree[0]), tree_to_scheme(tree[1:]))
+    elif hasattr(tree, '__iter__'): # is iterable
+        return tree_to_scheme(iter(tree))
     elif tree is None:
         return None
     else:
         raise ValueError("Invalid parsed tree")
 
-def string_to_scheme(string, start_parsing=PROGRAM):
+def string_to_scheme(input, start_parsing=PROGRAM):
     """
-    Transforms a string input into a pair lisp's structure.
+    Transforms a string or file input into a pair lisp's structure.
     """
 
     #: Rules for the scheme lexical analyzer
@@ -94,7 +100,8 @@ def string_to_scheme(string, start_parsing=PROGRAM):
 
     with parser as p:
         #: The scheme grammar for the parser
-        SCHEME_GRAMMAR = {PROGRAM:             p.oneOrMore(p.expression(EXPRESSION)),
+        SCHEME_GRAMMAR = {PROGRAM:             p.oneOrMore(p.expression(EXPRESSION)) &
+                                               p.end(),
 
                           EXPRESSION:          p.expression(QUOTED_EXPRESSION) |
                                                p.expression(ATOM) |
@@ -116,15 +123,21 @@ def string_to_scheme(string, start_parsing=PROGRAM):
 
     parser.grammar = SCHEME_GRAMMAR
 
-    return tree_to_scheme(parser.parse(tokenizer.tokens(string)))
+    # wraps input into a file-stream if it's a file object
+    if input.__class__ in (codecs.StreamReaderWriter, file):
+        input = FileStream(input)
+    elif hasattr(input, 'iter'):
+        raise ValueError("Invalid input object")
 
-def evaluate(string, environment=None):
+    return tree_to_scheme(parser.parse(tokenizer.tokens(input)))
+
+def evaluate(input, environment=None):
     """
-    evaluate a string in the scheme evaluator as a program, and return the
-    result as a scheme object.
+    evaluate a string or file object in the scheme evaluator as a program, and
+    return the result as a scheme object.
     """
     environment = make_default_environment() if environment is None else environment
-    expressions = string_to_scheme(string)
+    expressions = string_to_scheme(input)
 
     for expression in expressions:
         result = full_evaluate(expression, environment)

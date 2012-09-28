@@ -37,17 +37,6 @@ class Environment(dict):
             else:
                 raise KeyError("Unbound variable %s" % name)
 
-    def exists(self, name):
-        return name in self or (self.parent and self.parent.exists(name))
-
-    def change(self, name, value):
-        if name in self:
-            self[name] = value
-        elif self.parent is None:
-            raise KeyError("Unbound variable %s" % name)
-        else:
-            self.parent.change(name, value)
-
     def truncated_repr(self):
         if len(self.keys()) > 6:
             current = "%s ..." % dict(self.items()[:5])
@@ -63,8 +52,24 @@ class Environment(dict):
     def __repr__(self):
         return "<environment %s>" % self.truncated_repr()
 
+class NumericEnvironment(Environment):
+
+    def __getitem__(self, name):
+        # try to transform to numeric forms
+        try:
+            return int(name)
+        except ValueError:
+            try:
+                return float(name)
+            except ValueError:
+                try:
+                    return complex(name)
+                except ValueError:
+                    return super(NumericEnvironment, self).__getitem__(name)
+
+
 def make_minimum_environment():
-    env = Environment()
+    env = NumericEnvironment()
 
     # utf-8 stdin and out
     stdin = codecs.getreader('utf-8')(sys.stdin)
