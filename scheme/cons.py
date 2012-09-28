@@ -36,17 +36,22 @@ class cons(object):
             current = cdr(current)
         return current
 
+    def map(self, callable_):
+        return cons(callable_(self.first),
+                    self.second.map(self.second) if is_pair(self.second) else
+                    callable_(self.second))
+
     def __len__(self):
         return len(list(iter(self)))
 
 def car(pair):
     if not is_pair(pair):
-        raise ValueError("Not a cons")
+        raise ValueError("Not a cons: %s" % pair)
     return pair.first
 
 def cdr(pair):
     if not is_pair(pair):
-        raise ValueError("Not a cons")
+        raise ValueError("Not a cons: %s" % pair)
     return pair.second
 
 caar   = lambda x: car(car(x))
@@ -54,10 +59,12 @@ cddr   = lambda x: cdr(cdr(x))
 cdar   = lambda x: cdr(car(x))
 cadr   = lambda x: car(cdr(x))
 caddr  = lambda x: car(cdr(cdr(x)))
+caadr  = lambda x: car(car(cdr(x)))
+cdadr  = lambda x: cdr(car(cdr(x)))
 cadddr = lambda x: car(cdr(cdr(cdr(x))))
 
 #: atom is a numeral or a symbol
-is_atom   = lambda x: is_symbol(x) or type(x) in (int, float, complex)
+is_atom   = lambda x: is_symbol(x) or type(x) in (int, float, complex, bool)
 
 #: symbol is a textual representation
 is_symbol = lambda x: type(x) in (str, unicode)

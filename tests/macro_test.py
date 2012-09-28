@@ -78,14 +78,14 @@ class TestMacro(unittest.TestCase):
         self.compare_result(s('(if x (my-and y z) #f)'), result)
 
         # a useful macro: let
-        macro = Macro([ (s('(_ ((n v)) e1 ...)'),
-                         s('((lambda (n) e1 ...) v)')),
-                        (s('(_ ((n v) ...d) e1 ...e)'),
-                         s('(let (...d) ((lambda (n) e1 ...e) v))')), ])
+        macro = Macro([ (s('(_ ((n v)) e)'),
+                         s('((lambda (n) e) v)')),
+                        (s('(_ ((n v) ...) e)'),
+                         s('(let (...) ((lambda (n) e) v))')), ])
 
         # we apply twice to get the full expanded form
-        result = macro.transform(macro.transform(s('(let ((x a) (y (+ b c))) (display x) (display y))')))
-        self.compare_result(s('((lambda (y) ((lambda (x) (display x) (display y)) a)) (+ b c))'),
+        result = macro.transform(macro.transform(s('(let ((x a) (y (+ b c))) (display x y))')))
+        self.compare_result(s('((lambda (y) ((lambda (x) (display x y)) a)) (+ b c))'),
                             result)
 
     def test_using_reseved_words(self):
@@ -112,17 +112,16 @@ class TestMacro(unittest.TestCase):
     def test_macro_usage(self):
 
         string = """
-            (begin
-                    ; define macro in the environment
-                    (define 'let (macro ()
-                                       ((_ ((n v)) e1 ...)
-                                        ((lambda (n) e1 ...) v))
-                                       ((_ ((n v) ...d) e1 ...e)
-                                        (let (...d) ((lambda (n) e1 ...e) v)))))
+                ; define macro in the environment
+                (define my-let (macro ()
+                                      ((_ ((n v)) e)
+                                       ((lambda (n) e) v))
+                                      ((_ ((n v) ...) e)
+                                       (my-let (...) ((lambda (n) e) v)))))
 
-                    ; now using the macro
-                    (let ((x 10) (y 20))
-                         (+ x y)))
+                ; now using the macro
+                (my-let ((x 10) (y 20))
+                         (+ x y))
         """
         result = evaluate(string)
         self.assertEquals(30, result)

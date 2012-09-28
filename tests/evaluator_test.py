@@ -145,16 +145,16 @@ class TestEvaluator(unittest.TestCase):
         result = evaluator.evaluate("(+ 1 2 3)")
         self.assertEquals(6, result)
 
-        # begin and define special forms, environment
-        result = evaluator.evaluate("(begin (define 'x 10) (define 'y 20) (+ x y))")
+        # define special forms, environment
+        result = evaluator.evaluate("(define x 10) (define y 20) (+ x y)")
         self.assertEquals(30, result)
 
         # creating and calling procedures
-        result = evaluator.evaluate("(begin (define 'inc (lambda (x) (+ x 1))) (inc 40))")
+        result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
         self.assertEquals(41, result)
 
         # if form
-        result = evaluator.evaluate("(begin (define 'inc (lambda (x) (+ x 1))) (if (= (inc 40) 41) 3 4))")
+        result = evaluator.evaluate("(define inc (lambda (x) (+ x 1))) (if (= (inc 40) 41) 3 4)")
         self.assertEquals(3, result)
 
         # quoting symbols
@@ -162,35 +162,35 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals('ab', result)
 
         # quoting lists
-        result = evaluator.evaluate("(begin (define 'x '(+ 1 2)) (car x))")
+        result = evaluator.evaluate("(let ((x '(+ 1 2))) (car x))")
         self.assertEquals('+', result)
 
         # length of a list
-        result = evaluator.evaluate("(begin (define 'x '(+ 1 2)) (len x))")
+        result = evaluator.evaluate("(define x '(+ 1 2)) (len x)")
         self.assertEquals(3, result)
 
         # using cdr
-        result = evaluator.evaluate("(begin (define 'x '(+ 1 2)) (len (cdr x)))")
+        result = evaluator.evaluate("(let ((x '(+ 1 2))) (len (cdr x)))")
         self.assertEquals(2, result)
 
         # using cons
-        result = evaluator.evaluate("(begin (define 'x (cons 1 2)) (car x))")
+        result = evaluator.evaluate("(define x (cons 1 2)) (car x)")
         self.assertEquals(1, result)
 
         # using cons
-        result = evaluator.evaluate("(begin (define 'x (cons 1 2)) (cdr x))")
+        result = evaluator.evaluate("(let ((x (cons 1 2))) (cdr x))")
         self.assertEquals(2, result)
 
         # variable arguments
-        result = evaluator.evaluate("(begin (define 'n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5)")
         self.assertEquals(5, result)
 
         # variable arguments as optional
-        result = evaluator.evaluate("(begin (define 'n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1))")
+        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) 1)))) (n-of-args 1))")
         self.assertEquals(1, result)
 
         # zero or more arguments
-        result = evaluator.evaluate("(begin (define 'n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5))")
+        result = evaluator.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
         self.assertEquals(5, result)
 
         # nested environments in let (using macro)
@@ -198,7 +198,7 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(28, result)
 
         # nested environments in lambdas
-        result = evaluator.evaluate("(begin (define 'x 100) (define 'inc (lambda (x) (+ 1 x))) (+ (inc 7) x))")
+        result = evaluator.evaluate("(define x 100) (define inc (lambda (x) (+ 1 x))) (+ (inc 7) x)")
         self.assertEquals(108, result)
 
         # atom?
@@ -212,19 +212,19 @@ class TestEvaluator(unittest.TestCase):
     def test_quicksort(self):
 
         string = """
-            (define 'filter
+            (define filter
                     (lambda (f l)
                             (cond ((nil? l) nil)
                                   ((f (car l)) (cons (car l) (filter f (cdr l))))
                                   (else (filter f (cdr l))))))
 
-             (define 'join
+             (define join
                      (lambda (x y)
                              (if (nil? x)
                                  y
                                  (cons (car x) (join (cdr x) y)))))
 
-             (define 'sort
+             (define sort
                      (lambda (l cmp)
                              (if (nil? l)
                                  nil
@@ -233,7 +233,15 @@ class TestEvaluator(unittest.TestCase):
                                               (cons pivot
                                                     (sort (filter (lambda (e) (cmp e pivot)) (cdr l)) cmp)))))))
 
-            (sort (list 8 6 0 1 5 2 9 3 4 7) >)
+            ; This procedure is useful to evaluate all lazy values from the
+            ; list, by using the full-evaluating form cons'
+            (define eval-list
+                    (lambda (l)
+                            (if (nil? l)
+                                nil
+                                (cons' (car l) (eval-list (cdr l))))))
+
+            (eval-list (sort (list 8 6 0 1 5 2 9 3 4 7) >))
         """
 
         result = evaluator.evaluate(string)
@@ -244,14 +252,13 @@ class TestEvaluator(unittest.TestCase):
     def test_tail_call_optimization(self):
 
         string = """
-            (define 'inc-to-5000
+            (define inc-to-5000
                     (lambda ()
-                       (define 'iter
-                               (lambda (x)
-                                       (if (>= x 5000)
-                                           x
-                                           (iter (+ 1 x)))))
-                       (iter 1)))
+                       (let ((iter (lambda (x)
+                                           (if (>= x 5000)
+                                               x
+                                               (iter (+ 1 x))))))
+                            (iter 1))))
             (inc-to-5000)
         """
 
@@ -259,29 +266,43 @@ class TestEvaluator(unittest.TestCase):
         result = evaluator.evaluate(string)
         self.assertEquals(5000, result)
 
-    def test_set_define(self):
+    def test_lazy_evaluation(self):
 
-        result = evaluator.evaluate("(let ((x 10)) (defined? 'x))")
-        self.assertEquals(True, result)
+        string = """
+            (define count
+                    (lambda (n)
+                            (cons n (count (+ n 1)))))
 
-        result = evaluator.evaluate("(let ((x 10)) (defined? 'y))")
-        self.assertEquals(False, result)
+            (define take-n
+                    (lambda (n l)
+                            (if (= n 0)
+                                nil
+                                (cons (car l)
+                                      (take-n (- n 1)
+                                            (cdr l))))))
 
-        result = evaluator.evaluate("(let ((x 10)) (set? 'x))")
-        self.assertEquals(True, result)
+            ; This procedure is useful to evaluate all lazy values from the
+            ; list, by using the full-evaluating form cons'
+            (define eval-list
+                    (lambda (l)
+                            (if (nil? l)
+                                nil
+                                (cons' (car l) (eval-list (cdr l))))))
 
-        result = evaluator.evaluate("(let ((x 10)) (set? 'y))")
-        self.assertEquals(False, result)
+            (eval-list (take-n 40 (count 1)))
+        """
+        result = evaluator.evaluate(string)
+        self.assertEquals(range(1,41), list(iter(result)))
 
-        result = evaluator.evaluate("(let ((x 10)) (let ((y 20)) (defined? 'x)))")
-        self.assertEquals(True, result)
+        string = """
+            (define f
+                    (lambda (x y z)
+                            (if x
+                                y
+                                z)))
 
-        result = evaluator.evaluate("(let ((x 10)) (let ((y 20)) (defined? 'y)))")
-        self.assertEquals(True, result)
-
-        result = evaluator.evaluate("(let ((x 10)) (let ((y 20)) (set? 'x)))")
-        self.assertEquals(False, result)
-
-        result = evaluator.evaluate("(let ((x 10)) (let ((y 20)) (set? 'y)))")
-        self.assertEquals(True, result)
+            (f #f (/ 1 0) 30)
+        """
+        result = evaluator.evaluate(string)
+        self.assertEquals(30, result)
 

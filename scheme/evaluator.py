@@ -1,10 +1,11 @@
 # coding: utf-8
 
 from cons import *
+from thunk import Thunk, is_thunk
 from environment import Environment, make_default_environment
-from macro import Macro
+from macro import Macro, is_macro
 from parser import Element, Parser
-from procedure import Procedure
+from procedure import Procedure, is_procedure
 import lexer
 
 __all__ = ["evaluate"]
@@ -22,7 +23,18 @@ def tree_to_scheme(tree):
 
     if type(tree) == Element:
         if tree.name == ATOM:
-            return tree.value[0].value.value
+            val = tree.value[0].value.value
+            # try to transform to numeric forms
+            try:
+                return int(val)
+            except ValueError:
+                try:
+                    return float(val)
+                except ValueError:
+                    try:
+                        return complex(val)
+                    except ValueError:
+                        return val
         elif tree.name == QUOTED_EXPRESSION:
             return cons('quote', cons(tree_to_scheme(tree.value[0]), None))
         elif tree.name == LIST:
@@ -111,205 +123,99 @@ def evaluate(string, environment=None):
     evaluate a string in the scheme evaluator as a program, and return the
     result as a scheme object.
     """
-    evaluator = Evaluator(make_default_environment() if environment is None else environment)
-
+    environment = make_default_environment() if environment is None else environment
     expressions = string_to_scheme(string)
 
     for expression in expressions:
-        result = evaluator.evaluate(expression)
+        result = full_evaluate(expression, environment)
     return result
 
-class Evaluator(object):
+def full_evaluate(expression, environment):
     """
-    The scheme evaluator. It's a register machine implementation of the
-    Explicit-Control Evaluator from the book Structure and Interpretation of
-    Computer Programs. Extended with some stuff.
+    Fully evaluate an expression until its basic representation
     """
 
-    def __init__(self, environment):
-        # initialize registers
-        self.exp = None
-        self.env = environment
-        self.val = None
-        self.continue_ = None
-        self.proc = None
-        self.argl = None
-        self.unev = None
-
-        # initialize stack
-        self.stack = []
-
-    def evaluate(self, expression):
-        """
-        Evaluate program s-expression, returning a s-expression result
-        """
-        # feed expression
-        self.exp = expression
-
-        # start with eval-dispatch
-        continuation = self._eval_dispatch()
-
-        # the continuation loop
-        while continuation:
-            continuation = continuation()
-
-        return self.val
-
-    def _eval_dispatch(self):
-        if is_atom(self.exp): # is a not-nil and not-pair value?
-
-            # if it's a number, try to evaluate to the numeric value. like the
-            # environment has the numeric
-            try:
-                self.val = int(self.exp)
-            except ValueError:
-                try:
-                    self.val = float(self.exp)
-                except ValueError:
-                    try:
-                        self.val = complex(self.exp)
-                    except ValueError:
-                        self.val = self.env[self.exp]
-            return self.continue_
-        if is_nil(self.exp):  # is nil, evaluate to itself
-            self.val = self.exp
-            return self.continue_
-        elif car(self.exp) == 'quote':
-            self.val = cadr(self.exp) # the quoted text
-            return self.continue_
-        elif car(self.exp) == 'lambda':
-            self.val = Procedure(cadr(self.exp), # the lambda parameters
-                                 cddr(self.exp), # the lambda body
-                                 self.env)
-            return self.continue_
-        elif car(self.exp) == 'macro':
-            self.val = Macro( [(car(e), cadr(e)) for e in cddr(self.exp)],
-                              [] if not cadr(self.exp) else set(iter(cadr(self.exp))) )
-            return self.continue_
-        elif car(self.exp) == 'eval':
-            self.exp = cadr(self.exp)
-            self.stack.append(self.continue_)
-            self.continue_ = self._ev_eval_1
-            return self._eval_dispatch
-        elif car(self.exp) == 'if':
-            self.stack.append(self.exp)
-            self.stack.append(self.env)
-            self.stack.append(self.continue_)
-            self.continue_ = self._ev_if_decide
-            self.exp = cadr(self.exp) # the if predicate
-            return self._eval_dispatch
-        else: # assume it's a procedure or macro application
-            self.stack.append(self.continue_)
-            self.stack.append(self.env)
-            self.stack.append(cdr(self.exp)) # the operands of the application
-            self.exp = car(self.exp) # the operator of the application
-            self.continue_ = self._ev_appl_did_operator
-            return self._eval_dispatch
-
-    def _ev_eval_1(self):
-        self.continue_ = self.stack.pop()
-        self.exp = self.val
-        return self._eval_dispatch
-
-    def _ev_if_decide(self):
-        self.continue_ = self.stack.pop()
-        self.env = self.stack.pop()
-        self.exp = self.stack.pop()
-        if self.val: # if evaluated predicate is true
-            self.exp = caddr(self.exp) # evaluates the if consequent
+    while True:
+        if is_thunk(expression):
+            if not expression.is_evaluated:
+                expression.is_evaluated = True
+                expression.expression = full_evaluate(expression.expression,
+                                                      expression.environment)
+            return expression.expression
+        elif is_symbol(expression):
+            expression = environment[expression]
+            continue
+        elif (is_atom(expression) or is_nil(expression) or
+              is_procedure(expression) or is_macro(expression) or
+              callable(expression)):
+            return expression
+        elif car(expression) == 'delay':
+            return Thunk(cadr(expression), environment)
+        elif car(expression) == 'define':
+            name = cadr(expression)
+            environment[name] = Thunk(caddr(expression), environment)
+            return name
+        elif car(expression) == 'quote':
+            return cadr(expression)
+        elif car(expression) == 'eval':
+            expression = full_evaluate(cadr(expression), environment)
+            continue
+        elif car(expression) == 'if':
+            condition = full_evaluate(cadr(expression), environment)
+            expression = caddr(expression) if condition else cadddr(expression)
+            continue
+        elif car(expression) == 'lambda':
+            return Procedure(cadr(expression), # parameters
+                             cddr(expression), # body (list of expressions)
+                             environment)
+        elif car(expression) == 'macro':
+            return Macro( [(car(e), cadr(e)) for e in cddr(expression)], # rules
+                          [] if not cadr(expression) else set(iter(cadr(expression))) ) # reserved words
         else:
-            self.exp = cadddr(self.exp) # evaluates the if alternative
-        return self._eval_dispatch
+            # application of procedure or macro
+            operator = full_evaluate(car(expression), environment)
+            unev_operands = cdr(expression)
+            if is_macro(operator):
+                expression = operator.transform(cons('_', unev_operands))
+                continue
+            else:
+                if callable(operator):
+                    # evaluate each operand recursively
+                    operands = [full_evaluate(e, environment) for e in unev_operands] if unev_operands else []
+                    # return the application of the built-in procedure
+                    return operator(make_list(operands))
+                elif is_procedure(operator):
+                    # create Thunks (promisse to evaluate) for each operand
+                    thunks = [Thunk(e, environment) for e in unev_operands] if unev_operands else []
+                    proc_environment = Environment(parent=operator.environment)
+                    # if the lambda parameters is not in the format ( () [. <symbol>] )
+                    # for taking zero or more arguments
+                    if len(operator.parameters) != 1 or not is_nil(operator.parameters[0]):
+                        for name in operator.parameters:
+                            try:
+                                # take next argument
+                                proc_environment[name] = thunks.pop(0)
+                            except IndexError:
+                                raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
+                                                 (operator, len(operator.parameters)))
+                    if not is_nil(operator.optional):
+                        proc_environment[operator.optional] = cons('quote', cons(make_list(thunks), None))
+                    elif thunks:
+                        raise ValueError("Too much parameters for procedure %s. It should be %d." %
+                                         (operator, len(operator.parameters)))
 
-    def _ev_sequence(self):
-        self.exp = car(self.unev) # get the first expression of the list
-        if is_nil(cdr(self.unev)): # if this is the last expression
-            self.continue_ = self.stack.pop()
-            return self._eval_dispatch
-        else:
-            self.stack.append(self.unev)
-            self.stack.append(self.env)
-            self.continue_ = self._ev_sequence_continue
-            return self._eval_dispatch
+                    # evaluate recursively only the inner procedure expressions
+                    # (not the last)
+                    current = operator.body
+                    while cdr(current) is not None:
+                        full_evaluate(car(current), proc_environment)
+                        current = cdr(current)
 
-    def _ev_sequence_continue(self):
-        self.env = self.stack.pop()
-        self.unev = cdr(self.stack.pop()) # get the rest of expressions list
-        return self._ev_sequence
-
-    def _ev_appl_did_operator(self):
-        self.unev = self.stack.pop() # the operands
-        self.env = self.stack.pop()
-        self.proc = self.val # the operator
-
-        # if it's a macro
-        if type(self.proc) == Macro:
-            self.unev = cons('_', self.unev)
-            self.exp = self.proc.transform(self.unev)
-            self.continue_ = self.stack.pop()
-            return self._eval_dispatch
-        else:
-            # not a macro... must evaluate operands
-            self.argl = [] # the empty argument list
-            if is_nil(self.unev): # if there's no operands
-                return self._apply_dispatch
-            self.stack.append(self.proc)
-            return self._ev_appl_operand_loop
-
-    def _ev_appl_operand_loop(self):
-        self.stack.append(self.argl)
-        self.exp = car(self.unev) # the first operand
-        if is_nil(cdr(self.unev)): # if this is the last operand
-            self.continue_ = self._ev_appl_accum_last_arg
-            return self._eval_dispatch
-        else:
-            self.stack.append(self.env)
-            self.stack.append(self.unev)
-            self.continue_ = self._ev_appl_accumulate_arg
-            return self._eval_dispatch
-
-    def _ev_appl_accumulate_arg(self):
-        self.unev = self.stack.pop()
-        self.env = self.stack.pop()
-        self.argl = self.stack.pop()
-        self.argl.append(self.val) # accumulate the evaluated operand
-        self.unev = cdr(self.unev) # the rest of operands
-        return self._ev_appl_operand_loop
-
-    def _ev_appl_accum_last_arg(self):
-        self.argl = self.stack.pop()
-        self.argl.append(self.val) # accumulate the evaluated operand
-        self.proc = self.stack.pop()
-        return self._apply_dispatch
-
-    def _apply_dispatch(self):
-        if callable(self.proc): # primitive application
-            # call the primitive with the caller's environment and arguments
-            self.val = self.proc(self.env, make_list(self.argl))
-            self.continue_ = self.stack.pop()
-            return self.continue_
-        elif type(self.proc) == Procedure: # compound procedure
-            # extends environment:
-            self.env = Environment(parent=self.proc.environment)
-
-            # if the lambda parameters is not in the format ( () [. <symbol>] )
-            # for taking zero or more arguments
-            if len(self.proc.parameters) != 1 or not is_nil(self.proc.parameters[0]):
-                for name in self.proc.parameters:
-                    try:
-                        self.env[name] = self.argl.pop(0)
-                    except IndexError:
-                        raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
-                                         (self.proc, len(self.proc.parameters)))
-            if not is_nil(self.proc.optional):
-                self.env[self.proc.optional] = make_list(self.argl)
-            elif self.argl:
-                raise ValueError("Too much parameters for procedure %s. It should be %d." %
-                                 (self.proc, len(self.proc.parameters)))
-
-            self.unev = self.proc.body
-            return self._ev_sequence
-        else:
-            raise ValueError("Cannot apply procedure %s" % self.proc)
-
+                    environment = proc_environment
+                    expression = car(current)
+                    # continue not-recursively to evaluate the procedure's body
+                    # in the extended environment
+                    continue
+                else:
+                    raise ValueError("Not an operator: %s" % operator)
 

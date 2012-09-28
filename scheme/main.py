@@ -12,7 +12,7 @@ from cons import pretty_print
 
 def repl():
     #: the built-in scheme forms
-    SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval',)
+    SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval', 'define', 'delay')
 
     # the scheme auto-completer
     def completer(text, state):

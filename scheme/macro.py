@@ -13,7 +13,7 @@ class Macro(object):
     raised.
     """
 
-    def __init__(self, rules, reserved_words=None):
+    def __init__(self, rules, reserved_words=None, name=''):
         """
         Creates a new macro using the given rules, and optionaly, a set of
         reserved words. This words will be used to match with the symbols
@@ -21,6 +21,7 @@ class Macro(object):
         """
         self.rules = rules
         self.reserved_words = set() if not reserved_words else reserved_words
+        self.name = name
 
     def transform(self, expression):
         """
@@ -36,7 +37,8 @@ class Macro(object):
                 return substitute(variables, form)
 
         # no matching
-        raise ValueError("Expression %s does not match macro" % expression)
+        raise ValueError("Expression %s does not match macro %s" %
+                         (expression, self.name))
 
     def __repr__(self):
         return "<%d-rule macro>" % len(self.rules)
@@ -90,5 +92,5 @@ def substitute(variables, expression):
     else:
         return expression
 
-is_macro = lambda x: type(x) == Macro
+is_macro = lambda x: isinstance(x, Macro)
 
