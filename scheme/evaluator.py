@@ -37,7 +37,7 @@ def tree_to_scheme(tree):
         if tree.name == ATOM:
             return tree.value[0].value.value
         elif tree.name == QUOTED_EXPRESSION:
-            return cons('quote', cons(tree_to_scheme(tree.value[0]), None))
+            return quote(tree_to_scheme(tree.value[0]))
         elif tree.name == LIST:
             return tree_to_scheme(tree.value)
         elif tree.name == EXPRESSION:
@@ -162,36 +162,96 @@ def full_evaluate(expression, environment):
               is_procedure(expression) or is_macro(expression) or
               callable(expression)):
             return expression
+        elif not is_pair(expression):
+            raise ValueError("Cannot evaluate: %s" % expression)
         elif car(expression) == 'delay':
+            if len(expression) != 2:
+                raise SyntaxError("Unexpected delay form: %s. Should be (delay <expression>)" %
+                                  expression)
             return Thunk(cadr(expression), environment)
         elif car(expression) == 'define':
+            if len(expression) != 3:
+                raise SyntaxError("Unexpected define form: %s. Should be (define <symbol> <expression>)" %
+                                  expression)
             name = cadr(expression)
+            if not is_symbol(name):
+                raise SyntaxError("First argument of define form should be a symbol. Evaluating: %s" %
+                                  expression)
+            if name in environment:
+                raise ValueError("%s already bound in the current environment." % name)
             environment[name] = Thunk(caddr(expression), environment)
             return name
         elif car(expression) == 'quote':
+            if len(expression) != 2:
+                raise SyntaxError("Unexpected quote form: %s. Should be (quote <expression>)" %
+                                  expression)
             return cadr(expression)
         elif car(expression) == 'eval':
+            if len(expression) != 2:
+                raise SyntaxError("Unexpected eval form: %s. Should be (eval <expression>)" %
+                                  expression)
             expression = full_evaluate(cadr(expression), environment)
             continue
         elif car(expression) == 'if':
+            if len(expression) != 4:
+                raise SyntaxError("Unexpected if form: %s. Should be (if <condition> <consequent> <alternative>)" %
+                                  expression)
             condition = full_evaluate(cadr(expression), environment)
             expression = caddr(expression) if condition else cadddr(expression)
             continue
         elif car(expression) == 'lambda':
-            return Procedure(cadr(expression), # parameters
+            if len(expression) < 3:
+                raise SyntaxError("Unexpected lambda form: %s. Should be (lambda (<param> ...) <expression> ...)" %
+                                  expression)
+            parameters = cadr(expression)
+            if not is_pair(parameters) and not is_nil(parameters):
+                raise SyntaxError("Lambda parameters should be nil or a list of parameters. In %s" %
+                                  expression)
+            if is_pair(parameters):
+                current = parameters
+                while is_pair(current):
+                    if not is_nil(car(current)) and not is_symbol(car(current)):
+                        raise SyntaxError("Lambda parameters should be symbols. In %s" %
+                                          expression)
+                    current = cdr(current)
+                if not is_nil(current) and not is_symbol(current):
+                    raise SyntaxError("Lambda optinal parameter should be a symbol or nil. In %s" %
+                                      expression)
+
+            return Procedure(parameters, # parameters
                              cddr(expression), # body (list of expressions)
                              environment)
         elif car(expression) == 'macro':
-            return Macro( [(car(e), cadr(e)) for e in cddr(expression)], # rules
-                          [] if not cadr(expression) else set(iter(cadr(expression))) ) # reserved words
+            if len(expression) < 3:
+                raise SyntaxError("Unexpected define macro: %s. Should be (macro (<resword> ...) (<pattern> <transformation>) ...)" %
+                                  expression)
+            res_words = cadr(expression)
+            rules = cddr(expression)
+            if not is_nil(res_words) and not is_pair(res_words):
+                raise SyntaxError("Macro reserved words should be a list of symbols or nil. In %s" %
+                                  expression)
+            if is_pair(res_words):
+                for word in res_words:
+                    if not is_symbol(word):
+                        raise SyntaxError("Macro reserved words shoul all be symbols. In %s" %
+                                          expression)
+            for rule in rules:
+                if len(rule) != 2:
+                    raise SyntaxError("Macro rule should be in the form (<pattern> <expression>). In %s" %
+                                      expression)
+            return Macro( [(car(e), cadr(e)) for e in rules], # rules
+                          [] if not res_words else set(iter(res_words)) ) # reserved words
         else:
-            # application of procedure or macro
+            # evaluate head
             operator = full_evaluate(car(expression), environment)
-            unev_operands = cdr(expression)
+
             if is_macro(operator):
-                expression = operator.transform(cons('_', unev_operands))
+                expression = operator.transform(expression)
                 continue
             else:
+                # the the unevaluated operands
+                unev_operands = cdr(expression)
+
                 if callable(operator):
                     # evaluate each operand recursively
                     operands = [full_evaluate(e, environment) for e in unev_operands] if unev_operands else []
@@ -212,7 +272,7 @@ def full_evaluate(expression, environment):
                                 raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
                                                  (operator, len(operator.parameters)))
                     if not is_nil(operator.optional):
-                        proc_environment[operator.optional] = cons('quote', cons(make_list(thunks), None))
+                        proc_environment[operator.optional] = quote(make_list(thunks))
                     elif thunks:
                         raise ValueError("Too much parameters for procedure %s. It should be %d." %
                                          (operator, len(operator.parameters)))

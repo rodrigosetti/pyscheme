@@ -12,13 +12,14 @@ from environment import make_default_environment, make_minimum_environment
 from evaluator import evaluate
 
 def repl():
-    #: the built-in scheme forms
-    SCHEME_KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval', 'define', 'delay')
+    #: the built-in scheme forms and special repl commands
+    KEYWORDS = ('lambda', 'macro', 'if', 'quote', 'eval', 'define', 'delay',
+                '.reset', '.exit', '.quit', '.help')
 
     # the scheme auto-completer
     def completer(text, state):
         # look through SCHEME_KEYWORDS
-        for w in SCHEME_KEYWORDS:
+        for w in KEYWORDS:
             if w.startswith(text):
                 if state <= 0:
                     return w
@@ -46,13 +47,33 @@ def repl():
     while True:
 
         try:
-            result = evaluate(unicode(raw_input("> "), 'utf-8'), environment)
+            text = raw_input("> ")
+
+            # test for special commands
+            if text == '.reset':
+                print "reseting environment..."
+                environment = make_default_environment()
+                continue
+            elif text == '.help':
+                print "Just type scheme expression and have fun."
+                continue
+            elif text in ('.exit', '.quit'):
+                break
+
+            result = evaluate(unicode(text, 'utf-8'), environment)
+
             print "=>", pretty_print(result)
+
+            # set % as the last evaluated expression in environment
+            environment['%'] = result
         except EOFError:
-            print "\nexiting..."
             break
+        except KeyboardInterrupt:
+            print "\ninterrupt."
         except Exception as e:
             print "error:", e.message
+
+    print "\nexiting..."
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:

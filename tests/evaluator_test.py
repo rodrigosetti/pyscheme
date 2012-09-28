@@ -229,19 +229,19 @@ class TestEvaluator(unittest.TestCase):
                              (if (nil? l)
                                  nil
                                  (let ((pivot (car l)))
-                                        (join (sort (filter (lambda (e) (not (cmp e pivot))) (cdr l)) cmp)
+                                        (join (sort (filter (lambda (e)
+                                                                    (not (cmp e
+                                                                              pivot)))
+                                                            (cdr l))
+                                                    cmp)
                                               (cons pivot
-                                                    (sort (filter (lambda (e) (cmp e pivot)) (cdr l)) cmp)))))))
+                                                    (sort (filter (lambda (e)
+                                                                          (cmp e
+                                                                               pivot))
+                                                                  (cdr l))
+                                                          cmp)))))))
 
-            ; This procedure is useful to evaluate all lazy values from the
-            ; list, by using the full-evaluating form cons'
-            (define eval-list
-                    (lambda (l)
-                            (if (nil? l)
-                                nil
-                                (cons' (car l) (eval-list (cdr l))))))
-
-            (eval-list (sort (list 8 6 0 1 5 2 9 3 4 7) >))
+            (sort (list 8 6 0 1 5 2 9 3 4 7) >)
         """
 
         result = evaluator.evaluate(string)
@@ -271,7 +271,7 @@ class TestEvaluator(unittest.TestCase):
         string = """
             (define count
                     (lambda (n)
-                            (cons n (count (+ n 1)))))
+                            (cons' n (count (+ n 1)))))
 
             (define take-n
                     (lambda (n l)
@@ -279,17 +279,9 @@ class TestEvaluator(unittest.TestCase):
                                 nil
                                 (cons (car l)
                                       (take-n (- n 1)
-                                            (cdr l))))))
+                                            (cdr' l))))))
 
-            ; This procedure is useful to evaluate all lazy values from the
-            ; list, by using the full-evaluating form cons'
-            (define eval-list
-                    (lambda (l)
-                            (if (nil? l)
-                                nil
-                                (cons' (car l) (eval-list (cdr l))))))
-
-            (eval-list (take-n 40 (count 1)))
+            (take-n 40 (count 1))
         """
         result = evaluator.evaluate(string)
         self.assertEquals(range(1,41), list(iter(result)))

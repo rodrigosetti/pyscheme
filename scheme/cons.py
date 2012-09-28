@@ -5,7 +5,7 @@ class cons(object):
     Implementation of the fundamental scheme data structure
     """
 
-    def __init__(self, first, second):
+    def __init__(self, first, second=None):
         "Create a pair with values"
         self.first = first
         self.second = second
@@ -62,6 +62,8 @@ caddr  = lambda x: car(cdr(cdr(x)))
 caadr  = lambda x: car(car(cdr(x)))
 cdadr  = lambda x: cdr(car(cdr(x)))
 cadddr = lambda x: car(cdr(cdr(cdr(x))))
+
+quote = lambda x: cons('quote', cons(x))
 
 #: atom is a numeral or a symbol
 is_atom   = lambda x: is_symbol(x) or type(x) in (int, float, complex, bool)
