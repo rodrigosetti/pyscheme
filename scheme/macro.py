@@ -1,5 +1,8 @@
 # coding: utf-8
 
+import codecs
+import os
+
 from cons import *
 
 __all__ = ['Macro', 'is_macro']
@@ -41,7 +44,47 @@ class Macro(object):
                          (expression, self.name))
 
     def __repr__(self):
-        return "<%d-rule macro>" % len(self.rules)
+        if self.name:
+            return "<%s macro>" % self.name
+        else:
+            return "<%d-rule macro>" % len(self.rules)
+
+class IncludeMacro(Macro):
+
+    def __init__(self, name='include'):
+        super(IncludeMacro, self).__init__(None, name=name)
+        self.included = set()
+
+    def transform(self, expression):
+        from evaluator import string_to_scheme
+
+        variables = match_pattern(cons('include', cons('path')),
+                                  expression)
+        if variables:
+            path = find_file_in_path(variables['path'])
+
+            # check if this file was not included before
+            if path not in self.included:
+                try:
+                    with codecs.open(path, 'r', 'utf-8') as f:
+                        expression = string_to_scheme(f)
+                        self.included.add(path)
+                        return expression
+                except IOError:
+                    raise ValueError("Could not open file %s to include" % path)
+            else:
+                return cons(None)
+        else:
+            raise ValueError("Expression %s does not match macro %s" %
+                             (expression, self.name))
+
+def find_file_in_path(filename):
+    paths = os.getenv('SCHEME_PATH', '.').split(':')
+    for path in paths:
+        candidate = os.path.join(path, filename)
+        if os.path.exists(candidate):
+            return candidate
+    return filename
 
 def match_pattern(pattern, expression, reserved_words=set()):
     """

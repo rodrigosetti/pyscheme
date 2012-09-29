@@ -9,7 +9,7 @@ import re
 import sys
 
 from cons import pretty_print, quote
-from environment import make_default_environment, make_minimum_environment
+from environment import make_global_environment
 from evaluator import evaluate, evaluate_expression
 
 def identation_position(text):
@@ -104,7 +104,7 @@ def repl():
     readline.parse_and_bind("set blink-matching-paren on")
     readline.set_completer(completer)
 
-    environment = make_default_environment()
+    environment = make_global_environment()
     while True:
 
         try:
@@ -113,7 +113,7 @@ def repl():
             # test for special commands
             if text == '.reset':
                 print "reseting environment..."
-                environment = make_default_environment()
+                environment = make_global_environment()
                 continue
             elif text == '.help':
                 print "Just type scheme expression and have fun."

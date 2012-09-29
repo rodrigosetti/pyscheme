@@ -4,13 +4,13 @@ import codecs
 
 from cons import *
 from thunk import Thunk, is_thunk
-from environment import Environment, make_default_environment
+from environment import Environment, make_global_environment
 from macro import Macro, is_macro
 from parser import Element, Parser
 from procedure import Procedure, is_procedure
 import lexer
 
-__all__ = ["evaluate"]
+__all__ = ["evaluate", "evaluate_expression"]
 
 #: Lex states constants enum
 (START, COMMENT, QUOTE, LPAREN, RPAREN, MAYBE_DOT, MAYBE_INTEGER, STRING_OPEN,
@@ -136,7 +136,7 @@ def evaluate_expression(input, environment=None):
     evaluate a string or file object in the scheme evaluator as an expression,
     and return the result as a scheme object.
     """
-    environment = make_default_environment() if environment is None else environment
+    environment = make_global_environment() if environment is None else environment
     return full_evaluate(string_to_scheme(input, start_parsing=EXPRESSION),
                          environment)
 
@@ -145,7 +145,7 @@ def evaluate(input, environment=None):
     evaluate a string or file object in the scheme evaluator as a program, and
     return the result as a scheme object.
     """
-    environment = make_default_environment() if environment is None else environment
+    environment = make_global_environment() if environment is None else environment
     expressions = string_to_scheme(input)
 
     for expression in expressions:
@@ -178,6 +178,15 @@ def full_evaluate(expression, environment):
                 raise SyntaxError("Unexpected delay form: %s. Should be (delay <expression>)" %
                                   expression)
             return Thunk(cadr(expression), environment)
+        elif car(expression) == 'defined?':
+            if len(expression) != 2:
+                raise SyntaxError("Unexpected defined? form: %s. Should be (defined? <symbol>)" %
+                                  expression)
+            name = cadr(expression)
+            if not is_symbol(name):
+                raise SyntaxError("Argument of defined? form should be a symbol. Evaluating: %s" %
+                                  expression)
+            return environment.exists(name)
         elif car(expression) == 'define':
             if len(expression) != 3:
                 raise SyntaxError("Unexpected define form: %s. Should be (define <symbol> <expression>)" %
@@ -186,8 +195,6 @@ def full_evaluate(expression, environment):
             if not is_symbol(name):
                 raise SyntaxError("First argument of define form should be a symbol. Evaluating: %s" %
                                   expression)
-            if name in environment:
-                raise ValueError("%s already bound in the current environment." % name)
             environment[name] = Thunk(caddr(expression), environment)
             return name
         elif car(expression) == 'quote':
@@ -232,7 +239,7 @@ def full_evaluate(expression, environment):
                              environment)
         elif car(expression) == 'macro':
             if len(expression) < 3:
-                raise SyntaxError("Unexpected define macro: %s. Should be (macro (<resword> ...) (<pattern> <transformation>) ...)" %
+                raise SyntaxError("Unexpected define macro: %s. Should be (macro (<resword> ...) (<pattern> <transformation> ...) ...)" %
                                   expression)
             res_words = cadr(expression)
             rules = cddr(expression)
@@ -245,17 +252,22 @@ def full_evaluate(expression, environment):
                         raise SyntaxError("Macro reserved words shoul all be symbols. In %s" %
                                           expression)
             for rule in rules:
-                if len(rule) != 2:
-                    raise SyntaxError("Macro rule should be in the form (<pattern> <expression>). In %s" %
+                if len(rule) < 2:
+                    raise SyntaxError("Macro rule should be in the form (<pattern> <expression> ...). In %s" %
                                       expression)
-            return Macro( [(car(e), cadr(e)) for e in rules], # rules
+            return Macro( [(car(e), cdr(e)) for e in rules], # rules
                           [] if not res_words else set(iter(res_words)) ) # reserved words
         else:
             # evaluate head
             operator = full_evaluate(car(expression), environment)
 
             if is_macro(operator):
-                expression = operator.transform(expression)
+                # evaluate recursively only the inner expressions (not the last)
+                current = operator.transform(expression)
+                while cdr(current) is not None:
+                    full_evaluate(car(current), environment)
+                    current = cdr(current)
+                expression = car(current)
                 continue
             else:
                 # the the unevaluated operands
@@ -268,7 +280,7 @@ def full_evaluate(expression, environment):
                     return operator(make_list(operands))
                 elif is_procedure(operator):
                     # create Thunks (promisse to evaluate) for each operand
-                    thunks = [Thunk(e, environment) for e in unev_operands] if unev_operands else []
+                    unev_op_list = list(iter(unev_operands)) if unev_operands else []
                     proc_environment = Environment(parent=operator.environment)
                     # if the lambda parameters is not in the format ( () [. <symbol>] )
                     # for taking zero or more arguments
@@ -276,13 +288,19 @@ def full_evaluate(expression, environment):
                         for name in operator.parameters:
                             try:
                                 # take next argument
-                                proc_environment[name] = thunks.pop(0)
+                                proc_environment[name] = Thunk(unev_op_list.pop(0),
+                                                               environment)
                             except IndexError:
                                 raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
                                                  (operator, len(operator.parameters)))
                     if not is_nil(operator.optional):
-                        proc_environment[operator.optional] = quote(make_list(thunks))
-                    elif thunks:
+                        # the optional argument is something, that when
+                        # evaluated, yields the list of rest of the operands
+                        # evaluated
+                        proc_environment[operator.optional] = Thunk(cons(lambda x: x,
+                                                                         make_list(unev_op_list)),
+                                                                    environment)
+                    elif unev_op_list:
                         raise ValueError("Too much parameters for procedure %s. It should be %d." %
                                          (operator, len(operator.parameters)))
 

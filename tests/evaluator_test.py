@@ -1,15 +1,22 @@
 #! coding: utf-8
 
 import unittest
-from scheme.lexer import Token
+from scheme.environment import make_global_environment
 import scheme.evaluator as evaluator
-from scheme.evaluator import cons
+from scheme.cons import *
 
 class TestEvaluator(unittest.TestCase):
 
+    def setUp(self):
+        self.environment = make_global_environment()
+        self.evaluate('(include base.scm)')
+
+    def evaluate(self, text):
+        return evaluator.evaluate(text, self.environment)
+
     def compare_result(self, expected, actual):
-        if evaluator.is_pair(expected):
-            self.assertTrue(evaluator.is_pair(actual))
+        if is_pair(expected):
+            self.assertTrue(is_pair(actual))
             self.compare_result(expected.first, actual.first)
             self.compare_result(expected.second, actual.second)
         else:
@@ -18,11 +25,11 @@ class TestEvaluator(unittest.TestCase):
 
     def test_cons_car_and_cdr(self):
 
-        p = evaluator.cons('A', 'B')
+        p = cons('A', 'B')
 
-        self.assertTrue(evaluator.is_pair(p))
-        self.assertTrue('A', evaluator.car(p))
-        self.assertTrue('B', evaluator.cdr(p))
+        self.assertTrue(is_pair(p))
+        self.assertTrue('A', car(p))
+        self.assertTrue('B', cdr(p))
 
     def test_string_to_scheme_simple_list(self):
 
@@ -89,45 +96,45 @@ class TestEvaluator(unittest.TestCase):
 
     def test_self_eval(self):
 
-        result = evaluator.evaluate('10')
+        result = self.evaluate('10')
         self.compare_result(10, result)
 
     def test_nil_value(self):
 
         # using nil
-        result = evaluator.evaluate('nil')
+        result = self.evaluate('nil')
         self.compare_result(None, result)
 
         # using the () notation
-        result = evaluator.evaluate('()')
+        result = self.evaluate('()')
         self.compare_result(None, result)
 
         # using the (list) notation
-        result = evaluator.evaluate('(list)')
+        result = self.evaluate('(list)')
         self.compare_result(None, result)
 
         # using the () notation
-        result = evaluator.evaluate("(len ())")
+        result = self.evaluate("(len ())")
         self.assertEquals(0, result)
 
         # using nil
-        result = evaluator.evaluate("(len nil)")
+        result = self.evaluate("(len nil)")
         self.assertEquals(0, result)
 
         # using empty list
-        result = evaluator.evaluate("(len (list ))")
+        result = self.evaluate("(len (list ))")
         self.assertEquals(0, result)
 
         # using the () notation
-        result = evaluator.evaluate("(nil? ())")
+        result = self.evaluate("(nil? ())")
         self.assertEquals(True, result)
 
         # using nil
-        result = evaluator.evaluate("(nil? nil)")
+        result = self.evaluate("(nil? nil)")
         self.assertEquals(True, result)
 
         # using empty list
-        result = evaluator.evaluate("(nil? (list ))")
+        result = self.evaluate("(nil? (list ))")
         self.assertEquals(True, result)
 
 
@@ -142,71 +149,71 @@ class TestEvaluator(unittest.TestCase):
     def test_evaluate_expressions(self):
 
         # built-in procedure application
-        result = evaluator.evaluate("(+ 1 2 3)")
+        result = self.evaluate("(+ 1 2 3)")
         self.assertEquals(6, result)
 
         # define special forms, environment
-        result = evaluator.evaluate("(define x 10) (define y 20) (+ x y)")
+        result = self.evaluate("(define x 10) (define y 20) (+ x y)")
         self.assertEquals(30, result)
 
         # creating and calling procedures
-        result = evaluator.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
+        result = self.evaluate("(let ((inc (lambda (x) (+ x 1)))) (inc 40))")
         self.assertEquals(41, result)
 
         # if form
-        result = evaluator.evaluate("(define inc (lambda (x) (+ x 1))) (if (= (inc 40) 41) 3 4)")
+        result = self.evaluate("(define inc (lambda (x) (+ x 1))) (if (= (inc 40) 41) 3 4)")
         self.assertEquals(3, result)
 
         # quoting symbols
-        result = evaluator.evaluate("(+ 'a 'b)")
+        result = self.evaluate("(+ 'a 'b)")
         self.assertEquals('ab', result)
 
         # quoting lists
-        result = evaluator.evaluate("(let ((x '(+ 1 2))) (car x))")
+        result = self.evaluate("(let ((x '(+ 1 2))) (car x))")
         self.assertEquals('+', result)
 
         # length of a list
-        result = evaluator.evaluate("(define x '(+ 1 2)) (len x)")
+        result = self.evaluate("(define x '(+ 1 2)) (len x)")
         self.assertEquals(3, result)
 
         # using cdr
-        result = evaluator.evaluate("(let ((x '(+ 1 2))) (len (cdr x)))")
+        result = self.evaluate("(let ((x '(+ 1 2))) (len (cdr x)))")
         self.assertEquals(2, result)
 
         # using cons
-        result = evaluator.evaluate("(define x (cons 1 2)) (car x)")
+        result = self.evaluate("(define x (cons 1 2)) (car x)")
         self.assertEquals(1, result)
 
         # using cons
-        result = evaluator.evaluate("(let ((x (cons 1 2))) (cdr x))")
+        result = self.evaluate("(let ((x (cons 1 2))) (cdr x))")
         self.assertEquals(2, result)
 
         # variable arguments
-        result = evaluator.evaluate("(define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5)")
+        result = self.evaluate("(define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5)")
         self.assertEquals(5, result)
 
         # variable arguments as optional
-        result = evaluator.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) 1)))) (n-of-args 1))")
+        result = self.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) 1)))) (n-of-args 1))")
         self.assertEquals(1, result)
 
         # zero or more arguments
-        result = evaluator.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
+        result = self.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
         self.assertEquals(5, result)
 
         # nested environments in let (using macro)
-        result = evaluator.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
+        result = self.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
         self.assertEquals(28, result)
 
         # nested environments in lambdas
-        result = evaluator.evaluate("(define x 100) (define inc (lambda (x) (+ 1 x))) (+ (inc 7) x)")
+        result = self.evaluate("(define x 100) (define inc (lambda (x) (+ 1 x))) (+ (inc 7) x)")
         self.assertEquals(108, result)
 
         # atom?
-        result = evaluator.evaluate("(atom? 'x)")
+        result = self.evaluate("(atom? 'x)")
         self.assertEquals(True, result)
 
         # atom?
-        result = evaluator.evaluate("(atom? '(1 2 3 4 5))")
+        result = self.evaluate("(atom? '(1 2 3 4 5))")
         self.assertEquals(False, result)
 
     def test_quicksort(self):
@@ -244,7 +251,7 @@ class TestEvaluator(unittest.TestCase):
             (sort (list 8 6 0 1 5 2 9 3 4 7) >)
         """
 
-        result = evaluator.evaluate(string)
+        result = self.evaluate(string)
 
         self.assertEquals(10, len(result))
         self.assertEquals([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], list(iter(result)))
@@ -263,7 +270,7 @@ class TestEvaluator(unittest.TestCase):
         """
 
         # without tail-call this should reach maximum recursion depth
-        result = evaluator.evaluate(string)
+        result = self.evaluate(string)
         self.assertEquals(5000, result)
 
     def test_lazy_evaluation(self):
@@ -283,7 +290,7 @@ class TestEvaluator(unittest.TestCase):
 
             (take-n 40 (count 1))
         """
-        result = evaluator.evaluate(string)
+        result = self.evaluate(string)
         self.assertEquals(range(1,41), list(iter(result)))
 
         string = """
@@ -295,6 +302,6 @@ class TestEvaluator(unittest.TestCase):
 
             (f #f (/ 1 0) 30)
         """
-        result = evaluator.evaluate(string)
+        result = self.evaluate(string)
         self.assertEquals(30, result)
 

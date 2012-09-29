@@ -6,8 +6,8 @@ import sys
 
 from cons import *
 from thunk import is_thunk
-from macro import Macro, is_macro
-from procedure import Procedure, BuiltinProcedure, is_procedure
+from macro import IncludeMacro, is_macro
+from procedure import BuiltinProcedure, is_procedure
 
 class Environment(dict):
     """
@@ -36,6 +36,13 @@ class Environment(dict):
                 return self.parent[name]
             else:
                 raise KeyError("Unbound variable %s" % name)
+
+    def exists(self, name):
+        if name in self:
+            return True
+        elif self.parent is not None:
+            return self.parent.exists(name)
+        return False
 
     def truncated_repr(self):
         if len(self.keys()) > 6:
@@ -68,7 +75,7 @@ class NumericEnvironment(Environment):
                     return super(NumericEnvironment, self).__getitem__(name)
 
 
-def make_minimum_environment():
+def make_global_environment():
     env = NumericEnvironment()
 
     # utf-8 stdin and out
@@ -109,6 +116,9 @@ def make_minimum_environment():
             'file-write': BuiltinProcedure(lambda args: car(args).write(unicode(cadr(args)).encode('utf-8').decode('string_escape').decode('utf-8')), 'file-write', 2, 2),
             'file-read' : BuiltinProcedure(lambda args: car(args).read(1), 'file-read', 1, 1),
 
+            # dependency inclusion
+            'include' : IncludeMacro(),
+
             # arithmetic operations
             '+':   BuiltinProcedure(lambda args: reduce(operator.add, args), '+', 2),
             '-':   BuiltinProcedure(lambda args: reduce(operator.sub, args), '-', 2),
@@ -120,46 +130,5 @@ def make_minimum_environment():
             '<=':  BuiltinProcedure(lambda args: car(args) <= cadr(args), '<=', 2),
             '>=':  BuiltinProcedure(lambda args: car(args) >= cadr(args), '>=', 2),
             })
-    return env
-
-def make_default_environment():
-
-    from evaluator import string_to_scheme, EXPRESSION
-
-    s = lambda x: string_to_scheme(x, start_parsing=EXPRESSION)
-
-    env = make_minimum_environment()
-    env.update({
-            'len':   BuiltinProcedure(lambda args: 0 if is_nil(car(args)) else len(car(args)), 'len', 1, 1),
-            '!=':    BuiltinProcedure(lambda args: car(args) != cadr(args), '!=', 2, 2),
-            'not':   Macro(((s('(_ e)'), s('(if e #f #t)')),),
-                           name='not'),
-            "cons'":  Macro(((s('(_ x y)'), s("(cons x (delay y))")),),
-                           name='cons'),
-            "cdr'":   Macro(((s('(_ x)'), s("(if (thunk? (cdr x)) (eval (cdr x)) (cdr x))")),),
-                           name='cdr'),
-            'list':  Macro(((s('(_)'), s('()')),
-                            (s('(_ e ...)'), s('(cons e (list ...))')),),
-                           name='list'),
-            'begin': Macro(((s('(begin ...)'), s('((lambda () ...))')),),
-                           name='begin'),
-            'and':   Macro(((s('(_)'), s('#t')),
-                            (s('(_ e)'), s('e')),
-                            (s('(_ e1 e2 ...)'), s('(if e1 (and e2 ...) #f)')),),
-                           name='and'),
-            'or':    Macro(((s('(_)'), s('#f')),
-                            (s('(_ e)'), s('e')),
-                            (s('(_ e1 e2 ...)'), s('(let ((t e1)) (if t t (or e2 ...)))')),),
-                           name='or'),
-            'let':   Macro(((s('(let ((n v)) e ...)'), s('((lambda () (define n v) e ...))')),
-                            (s('(let ((n v) ...1) e ...2)'), s('((lambda () (define n v) (let (...1) e ...2)))')),),
-                           reserved_words=set(('let',)),
-                           name='let'),
-            'cond': Macro(((s('(cond (else e))'), s('e')),
-                           (s('(cond (e1 e2))'), s('(if e1 e2 ())')),
-                           (s('(cond (e1 e2 ) c1 ...)'), s('(if e1 e2 (cond c1 ...))')),),
-                          reserved_words=set(('cond', 'else',)),
-                          name='cond'),
-        })
     return env
 
