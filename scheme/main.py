@@ -5,11 +5,72 @@ import atexit
 import codecs
 import os
 import readline
+import re
 import sys
 
-from cons import pretty_print
+from cons import pretty_print, quote
 from environment import make_default_environment, make_minimum_environment
-from evaluator import evaluate
+from evaluator import evaluate, evaluate_expression
+
+def identation_position(text):
+    """
+    Returns the number of space characters to indent in the next line, if
+    the expression in text is given in the previous line.
+    """
+    # The identation position is right under the beginning of the last expression
+
+    # iterate over text from end to begining
+    for i in xrange(len(text)-1, -1, -1):
+        # find the first non-whitespace char
+        if not re.match('[\s(]', text[i]):
+            if text[i] == ')':
+                # expression: find the beginning of this expression
+                nesting = 1
+                for j in xrange(i-1, -1, -1):
+                    if text[j] == '(':
+                        nesting -= 1
+                        if nesting == 0:
+                            return j
+                    elif text[j] == ')':
+                        nesting += 1
+            else:
+                # symbol: find the beginning of this symbol
+                for j in xrange(i-1, -1, -1):
+                    if re.match('[\s(]', text[j]):
+                        return j+1
+    return 0
+
+class InterpreterInput(object):
+    """
+    Gets more raw_input while characters are needed by the parser
+    """
+
+    def __init__(self, input_text=''):
+        self.input_text = input_text
+        self.input_buffer = list(input_text) + ['\n']
+
+    def __iter__(self):
+        if self.input_text:
+            self.prompt = '... ' + (' ' * identation_position(self.input_text))
+        else:
+            self.prompt = '>> '
+        return self
+
+    def next(self):
+        if self.input_buffer:
+            return self.input_buffer.pop(0)
+        else:
+            identation = ' ' * identation_position(self.input_text)
+            self.prompt = '... ' + identation
+
+            self.input_text = identation + unicode(raw_input(self.prompt), 'utf-8')
+            self.input_buffer = list(self.input_text)
+
+            if not self.input_buffer:
+                raise StopIteration()
+
+            self.input_buffer.append('\n')
+            return next(self)
 
 def repl():
     #: the built-in scheme forms and special repl commands
@@ -47,7 +108,7 @@ def repl():
     while True:
 
         try:
-            text = raw_input("> ")
+            text = raw_input(">>  ")
 
             # test for special commands
             if text == '.reset':
@@ -60,12 +121,13 @@ def repl():
             elif text in ('.exit', '.quit'):
                 break
 
-            result = evaluate(unicode(text, 'utf-8'), environment)
+            result = evaluate_expression(InterpreterInput(text),
+                                         environment)
 
             print "=>", pretty_print(result)
 
             # set % as the last evaluated expression in environment
-            environment['%'] = result
+            environment['%'] = quote(result)
         except EOFError:
             break
         except KeyboardInterrupt:

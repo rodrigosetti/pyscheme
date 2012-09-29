@@ -131,6 +131,15 @@ def string_to_scheme(input, start_parsing=PROGRAM):
 
     return tree_to_scheme(parser.parse(tokenizer.tokens(input)))
 
+def evaluate_expression(input, environment=None):
+    """
+    evaluate a string or file object in the scheme evaluator as an expression,
+    and return the result as a scheme object.
+    """
+    environment = make_default_environment() if environment is None else environment
+    return full_evaluate(string_to_scheme(input, start_parsing=EXPRESSION),
+                         environment)
+
 def evaluate(input, environment=None):
     """
     evaluate a string or file object in the scheme evaluator as a program, and
