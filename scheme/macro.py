@@ -53,7 +53,6 @@ class IncludeMacro(Macro):
 
     def __init__(self, name='include'):
         super(IncludeMacro, self).__init__(None, name=name)
-        self.included = set()
 
     def transform(self, expression):
         from evaluator import string_to_scheme
@@ -62,18 +61,11 @@ class IncludeMacro(Macro):
                                   expression)
         if variables:
             path = find_file_in_path(variables['path'])
-
-            # check if this file was not included before
-            if path not in self.included:
-                try:
-                    with codecs.open(path, 'r', 'utf-8') as f:
-                        expression = string_to_scheme(f)
-                        self.included.add(path)
-                        return expression
-                except IOError:
-                    raise ValueError("Could not open file %s to include" % path)
-            else:
-                return cons(None)
+            try:
+                with codecs.open(path, 'r', 'utf-8') as f:
+                    return string_to_scheme(f)
+            except IOError:
+                raise ValueError("Could not open file %s to include" % path)
         else:
             raise ValueError("Expression %s does not match macro %s" %
                              (expression, self.name))
