@@ -6,6 +6,15 @@
 
 (if (defined? __base__) nil
     (begin
+
+     (define cadr
+             (lambda (x)
+                     (car (cdr x))))
+
+     (define cadr'
+             (lambda (x)
+                     (car (cdr' x))))
+
      (define len
              (lambda (l)
                      (if (nil? l)

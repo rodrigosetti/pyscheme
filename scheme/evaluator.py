@@ -317,5 +317,6 @@ def full_evaluate(expression, environment):
                     # in the extended environment
                     continue
                 else:
-                    raise ValueError("Not an operator: %s" % operator)
+                    raise ValueError("Not an operator: %s, in expression: %s" %
+                                     (operator, expression))
 

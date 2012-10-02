@@ -1,6 +1,8 @@
+#! /usr/bin/env python
 #! coding: utf-8
 
 import unittest
+
 from scheme.evaluator import string_to_scheme as s
 from scheme.evaluator import evaluate
 from scheme.cons import *
@@ -125,4 +127,7 @@ class TestMacro(unittest.TestCase):
         """
         result = evaluate(string)
         self.assertEquals(30, result)
+
+if __name__ == '__main__':
+    unittest.main()
 

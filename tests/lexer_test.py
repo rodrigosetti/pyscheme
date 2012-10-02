@@ -1,6 +1,8 @@
+#! /usr/bin/env python
 #! coding: utf-8
 
 import unittest
+
 import scheme.lexer as lexer
 
 class TestLexer(unittest.TestCase):
@@ -109,4 +111,7 @@ class TestLexer(unittest.TestCase):
 
         for expected, token in zip(expected_tokens, tokens):
             self.assertEquals(expected, (token.type, token.value))
+
+if __name__ == '__main__':
+    unittest.main()
 

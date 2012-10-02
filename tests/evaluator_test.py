@@ -1,6 +1,8 @@
+#! /usr/bin/env python
 #! coding: utf-8
 
 import unittest
+
 from scheme.environment import make_global_environment
 import scheme.evaluator as evaluator
 from scheme.cons import *
@@ -9,7 +11,7 @@ class TestEvaluator(unittest.TestCase):
 
     def setUp(self):
         self.environment = make_global_environment()
-        self.evaluate('(include base.scm)')
+        self.evaluate('(include lib/base.scm)')
 
     def evaluate(self, text):
         return evaluator.evaluate(text, self.environment)
@@ -188,18 +190,6 @@ class TestEvaluator(unittest.TestCase):
         result = self.evaluate("(let ((x (cons 1 2))) (cdr x))")
         self.assertEquals(2, result)
 
-        # variable arguments
-        result = self.evaluate("(define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5)")
-        self.assertEquals(5, result)
-
-        # variable arguments as optional
-        result = self.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) 1)))) (n-of-args 1))")
-        self.assertEquals(1, result)
-
-        # zero or more arguments
-        result = self.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
-        self.assertEquals(5, result)
-
         # nested environments in let (using macro)
         result = self.evaluate("(let ((x 7) (y (let ((x 20)) (+ x 1)))) (+ x y))")
         self.assertEquals(28, result)
@@ -215,6 +205,24 @@ class TestEvaluator(unittest.TestCase):
         # atom?
         result = self.evaluate("(atom? '(1 2 3 4 5))")
         self.assertEquals(False, result)
+
+    def test_extra_lambda_values(self):
+
+        # variable arguments
+        result = self.evaluate("(define n-of-args (lambda (a . b) (+ (len b) 1))) (n-of-args 1 2 3 4 5)")
+        self.assertEquals(5, result)
+
+        # one or more arguments
+        result = self.evaluate("(let ((n-of-args (lambda (a . b) (+ (len b) 1)))) (n-of-args 1))")
+        self.assertEquals(1, result)
+
+        # zero or more arguments
+        result = self.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
+        self.assertEquals(5, result)
+
+        # optional parameter is a list of evaluated args
+        result = self.evaluate("(define id (lambda (() . b) b)) (id 1 2 3 4 5)")
+        self.assertEquals([1, 2, 3, 4, 5], list(iter(result)))
 
     def test_quicksort(self):
 
@@ -304,4 +312,7 @@ class TestEvaluator(unittest.TestCase):
         """
         result = self.evaluate(string)
         self.assertEquals(30, result)
+
+if __name__ == '__main__':
+    unittest.main()
 

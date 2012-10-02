@@ -1,6 +1,8 @@
+#! /usr/bin/env python
 #! coding: utf-8
 
 import unittest
+
 import scheme.buffer as buffer
 
 class TestBuffer(unittest.TestCase):
@@ -144,4 +146,6 @@ class TestBuffer(unittest.TestCase):
         self.assertEquals(9, next(i))
         self.assertEquals(10, next(i))
 
+if __name__ == '__main__':
+    unittest.main()
 
