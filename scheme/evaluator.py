@@ -220,19 +220,19 @@ def full_evaluate(expression, environment):
                 raise SyntaxError("Unexpected lambda form: %s. Should be (lambda (<param> ...) <expression> ...)" %
                                   expression)
             parameters = cadr(expression)
-            if not is_pair(parameters) and not is_nil(parameters):
-                raise SyntaxError("Lambda parameters should be nil or a list of parameters. In %s" %
-                                  expression)
             if is_pair(parameters):
                 current = parameters
                 while is_pair(current):
-                    if not is_nil(car(current)) and not is_symbol(car(current)):
+                    if not is_symbol(car(current)):
                         raise SyntaxError("Lambda parameters should be symbols. In %s" %
                                           expression)
                     current = cdr(current)
                 if not is_nil(current) and not is_symbol(current):
-                    raise SyntaxError("Lambda optinal parameter should be a symbol or nil. In %s" %
+                    raise SyntaxError("Lambda optional parameter should be a symbol or nil. In %s" %
                                       expression)
+            elif not is_symbol(parameters) and not is_nil(parameters):
+                raise SyntaxError("Lambda parameters should be a symbol or a list of zero or more. In %s" %
+                                  expression)
 
             return Procedure(parameters, # parameters
                              cddr(expression), # body (list of expressions)
@@ -249,7 +249,7 @@ def full_evaluate(expression, environment):
             if is_pair(res_words):
                 for word in res_words:
                     if not is_symbol(word):
-                        raise SyntaxError("Macro reserved words shoul all be symbols. In %s" %
+                        raise SyntaxError("Macro reserved words should all be symbols. In %s" %
                                           expression)
             for rule in rules:
                 if len(rule) < 2:
@@ -270,7 +270,7 @@ def full_evaluate(expression, environment):
                 expression = car(current)
                 continue
             else:
-                # the the unevaluated operands
+                # The unevaluated operands
                 unev_operands = cdr(expression)
 
                 if callable(operator):
@@ -279,7 +279,7 @@ def full_evaluate(expression, environment):
                     # return the application of the built-in procedure
                     return operator(make_list(operands))
                 elif is_procedure(operator):
-                    # create Thunks (promisse to evaluate) for each operand
+                    # create Thunks (promise to evaluate) for each operand
                     unev_op_list = list(iter(unev_operands)) if unev_operands else []
                     proc_environment = Environment(parent=operator.environment)
                     # if the lambda parameters is not in the format ( () [. <symbol>] )
@@ -291,7 +291,7 @@ def full_evaluate(expression, environment):
                                 proc_environment[name] = Thunk(unev_op_list.pop(0),
                                                                environment)
                             except IndexError:
-                                raise ValueError("Insuficient parameters for procedure %s. It should be at least %d" %
+                                raise ValueError("Insufficient parameters for procedure %s. It should be at least %d" %
                                                  (operator, len(operator.parameters)))
                     if not is_nil(operator.optional):
                         # the optional argument is something, that when

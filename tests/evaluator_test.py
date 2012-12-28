@@ -217,11 +217,11 @@ class TestEvaluator(unittest.TestCase):
         self.assertEquals(1, result)
 
         # zero or more arguments
-        result = self.evaluate("(define n-of-args (lambda (() . b) (len b))) (n-of-args 1 2 3 4 5)")
+        result = self.evaluate("(define n-of-args (lambda b (len b))) (n-of-args 1 2 3 4 5)")
         self.assertEquals(5, result)
 
         # optional parameter is a list of evaluated args
-        result = self.evaluate("(define id (lambda (() . b) b)) (id 1 2 3 4 5)")
+        result = self.evaluate("(define id (lambda b b)) (id 1 2 3 4 5)")
         self.assertEquals([1, 2, 3, 4, 5], list(iter(result)))
 
     def test_quicksort(self):

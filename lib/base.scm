@@ -40,7 +40,7 @@
                                (cdr x)))))
 
      (define list
-             (lambda (() . x) x))
+             (lambda x x))
 
      (define when
              (macro ()
